@@ -1,14 +1,40 @@
-const API_KEY='e82c77...cac4';
-const CORS_PROXY = 'https://api.allorigins.win/get?url=';
+const API_KEY = 'e82c77585c5a4d0b95b9254535ddcac4';
 
-function buildUrl(path) {
-  return CORS_PROXY + encodeURIComponent('https://newsapi.org/v2/' + path + '&apiKey=' + API_KEY);
+async function fetchWithFallback(url) {
+  const proxies = [
+    {
+      build: (u) => 'https://corsproxy.io/?' + encodeURIComponent(u),
+      parse: async (res) => await res.json(),
+    },
+    {
+      build: (u) => 'https://api.allorigins.win/get?url=' + encodeURIComponent(u),
+      parse: async (res) => {
+        const data = await res.json();
+        return JSON.parse(data.contents);
+      },
+    },
+    {
+      build: (u) => 'https://thingproxy.freeboard.io/fetch/' + u,
+      parse: async (res) => await res.json(),
+    },
+  ];
+
+  let lastError;
+  for (const proxy of proxies) {
+    try {
+      const res = await fetch(proxy.build(url));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await proxy.parse(res);
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw new Error('All CORS proxies failed: ' + lastError?.message);
 }
 
 async function fetchNews(path) {
-  const res = await fetch(buildUrl(path));
-  const data = await res.json();
-  const parsed = JSON.parse(data.contents);
+  const url = 'https://newsapi.org/v2/' + path + '&apiKey=' + API_KEY;
+  const parsed = await fetchWithFallback(url);
   if (parsed.status !== 'ok') throw new Error(parsed.message || 'Failed to fetch news');
   return parsed.articles || [];
 }
