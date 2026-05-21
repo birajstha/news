@@ -10,6 +10,9 @@
     { id: 'science', label: 'Science' },
     { id: 'business', label: 'Business' },
     { id: 'sports', label: 'Sports' },
+    { id: 'neurotech', label: 'Neurotech' },
+    { id: 'brain', label: 'Brain' },
+    { id: 'mental-health', label: 'Mental Health' },
   ];
 
   let activeCategory = 'all';
@@ -65,7 +68,7 @@
     <div class="nav-inner">
       <div class="brand">
         <span class="brand-icon">📰</span>
-        <span class="brand-name">BJ <span class="accent">News</span></span>
+        <span class="brand-name">Biraj<span class="accent">News</span></span>
       </div>
       <div class="search-wrap">
         <input
@@ -123,7 +126,7 @@
 
   <!-- Footer -->
   <footer class="footer">
-    <p>© 2026 BJ News &nbsp;·&nbsp; Powered by <a href="https://newsapi.org" target="_blank">NewsAPI</a></p>
+    <p>© 2026 BirajNews &nbsp;·&nbsp; Powered by <a href="https://newsapi.org" target="_blank">NewsAPI</a></p>
   </footer>
 </div>
 

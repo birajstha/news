@@ -1,4 +1,4 @@
-const API_KEY = 'e82c77585c5a4d0b95b9254535ddcac4';
+const API_KEY='e82c77...cac4';
 const CORS_PROXY = 'https://api.allorigins.win/get?url=';
 
 function buildUrl(path) {
@@ -13,12 +13,20 @@ async function fetchNews(path) {
   return parsed.articles || [];
 }
 
+// Keyword categories that use /v2/everything
+const KEYWORD_CATEGORIES = {
+  neurotech: 'neurotechnology',
+  brain: 'brain+neuroscience',
+  'mental-health': 'mental+health',
+  ai: 'artificial+intelligence',
+};
+
 export async function fetchTopHeadlines(category = '') {
-  const cat = category && category !== 'all' ? `category=${category}&` : '';
-  const q = category === 'ai' ? 'q=artificial+intelligence&' : '';
-  if (category === 'ai') {
-    return fetchNews(`everything?q=artificial+intelligence&sortBy=publishedAt&pageSize=20`);
+  if (category && KEYWORD_CATEGORIES[category]) {
+    const q = KEYWORD_CATEGORIES[category];
+    return fetchNews(`everything?q=${q}&sortBy=publishedAt&pageSize=20`);
   }
+  const cat = category && category !== 'all' ? `category=${category}&` : '';
   return fetchNews(`top-headlines?${cat}country=us&pageSize=20`);
 }
 
