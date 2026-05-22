@@ -1,8 +1,6 @@
 // ─── Multi-Source Free News Engine ───────────────────────────────────────────
-// Sources: Hacker News API, RSS feeds via CF Pages proxy, public fallbacks
-// Strategy: CF Pages Function /api/proxy (edge, fast, cached) → allorigins fallback
-
-const NEWSAPI_KEY = 'e82c77585c5a4d0b95b9254535ddcac4';
+// Sources: Hacker News API, RSS feeds via CF Pages proxy, NewsAPI via CF server-side
+// NewsAPI key is a Cloudflare secret — never exposed to the browser.
 
 // ─── In-memory cache to avoid re-fetching within the same session ─────────────
 const _cache = new Map(); // key → { articles, ts }
@@ -80,22 +78,6 @@ function parseRSSXML(xml, feedUrl) {
   } catch { return []; }
 }
 
-// ─── CORS-safe fetch for JSON endpoints ───────────────────────────────────────
-async function proxiedFetch(url) {
-  const strategies = [
-    () => fetch('/api/proxy?url=' + encodeURIComponent(url), { signal: AbortSignal.timeout(12000) })
-            .then(r => r.json()),
-    () => fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(url))
-            .then(r => r.json()).then(d => JSON.parse(d.contents)),
-    () => fetch('https://corsproxy.io/?' + encodeURIComponent(url)).then(r => r.json()),
-  ];
-  let last;
-  for (const fn of strategies) {
-    try { return await fn(); } catch(e) { last = e; }
-  }
-  throw new Error('PROXY_FAILED: ' + last?.message);
-}
-
 // ─── Hacker News ──────────────────────────────────────────────────────────────
 async function fetchHackerNews() {
   const ids = await fetch('https://hacker-news.firebaseio.com/v0/topstories.json', {
@@ -127,11 +109,14 @@ async function fetchRSS(feedUrl) {
   return parseRSSXML(xml, feedUrl);
 }
 
-// ─── NewsAPI fallback ─────────────────────────────────────────────────────────
+// ─── NewsAPI — calls our secure CF Pages Function (key never in browser) ──────
 async function fetchNewsAPI(path) {
-  const url = 'https://newsapi.org/v2/' + path + '&apiKey=' + NEWSAPI_KEY;
-  const data = await proxiedFetch(url);
-  if (data.status !== 'ok') return [];
+  const res = await fetch(`/api/news?path=${encodeURIComponent(path)}`, {
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`NewsAPI proxy error: ${res.status}`);
+  const data = await res.json();
+  if (data.status !== 'ok') throw new Error(data.message || 'NewsAPI error');
   return (data.articles || []).map(a => ({ ...a, source: { name: a.source?.name || 'NewsAPI' } }));
 }
 
