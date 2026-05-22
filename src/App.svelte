@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import NewsCard from './lib/NewsCard.svelte';
   import { fetchTopHeadlines, searchNews, translateToNepali, streamTopHeadlines } from './lib/api.js';
 
@@ -169,7 +169,39 @@
 
   $: t = nepali ? UI.ne : UI.en;
 
-  onMount(() => loadNews('trending'));
+  // ─── Auto-refresh logic ────────────────────────────────────────────────────
+  // Peak hours (6-9am, 12-1pm, 6-9pm ET or Nepal time) → 15 min, else 30 min
+  function isPeakHour() {
+    const h = new Date().getHours(); // local device time
+    return (h >= 6 && h < 9) || (h >= 12 && h < 13) || (h >= 18 && h < 21);
+  }
+
+  let refreshInterval;
+  function scheduleRefresh() {
+    clearInterval(refreshInterval);
+    const ms = isPeakHour() ? 15 * 60 * 1000 : 30 * 60 * 1000;
+    refreshInterval = setInterval(() => loadNews(activeCategory), ms);
+  }
+
+  function handleVisibility() {
+    if (document.visibilityState === 'visible') {
+      loadNews(activeCategory); // fresh fetch when user returns to tab
+      scheduleRefresh();
+    } else {
+      clearInterval(refreshInterval);
+    }
+  }
+
+  onMount(() => {
+    loadNews('trending');
+    scheduleRefresh();
+    document.addEventListener('visibilitychange', handleVisibility);
+  });
+
+  onDestroy(() => {
+    clearInterval(refreshInterval);
+    document.removeEventListener('visibilitychange', handleVisibility);
+  });
 </script>
 
 <div class="app">
@@ -284,7 +316,7 @@
   </main>
 
   <footer class="footer">
-    <p>© 2026 BirajNews · <a href="https://newsapi.org" target="_blank">NewsAPI</a></p>
+    <p>© 2026 EvanieTech · <a href="https://newsapi.org" target="_blank">NewsAPI</a></p>
   </footer>
 </div>
 

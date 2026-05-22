@@ -4,7 +4,7 @@
 
 // ─── In-memory cache to avoid re-fetching within the same session ─────────────
 const _cache = new Map(); // key → { articles, ts }
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 0; // Edge cache (CF Worker) handles all caching — no browser-side cache
 
 function getCached(key) {
   const hit = _cache.get(key);
