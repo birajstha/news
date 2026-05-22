@@ -3,15 +3,57 @@
 // No paid keys required for HN + RSS. NewsAPI key used as bonus fallback.
 
 const NEWSAPI_KEY = 'e82c77585c5a4d0b95b9254535ddcac4';
-const RSS2JSON   = 'https://api.rss2json.com/v1/api.json?rss_url=';
 
-// ─── CORS-safe fetch with 3-proxy fallback ────────────────────────────────────
+// ─── Fetch raw XML through CORS proxy, parse client-side (no rss2json needed) ─
+async function fetchRawXML(url) {
+  const proxies = [
+    `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+    `https://corsproxy.io/?${encodeURIComponent(url)}`,
+    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+  ];
+  for (const proxy of proxies) {
+    try {
+      const res = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) continue;
+      const data = await res.json().catch(() => null);
+      // allorigins wraps in {contents: "..."}
+      const xml = data?.contents ?? await res.text();
+      if (xml && xml.includes('<item')) return xml;
+    } catch { /* try next */ }
+  }
+  return null;
+}
+
+function parseRSSXML(xml, feedUrl) {
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xml, 'text/xml');
+    const channelTitle = doc.querySelector('channel > title')?.textContent || feedUrl;
+    const items = [...doc.querySelectorAll('item')];
+    return items.slice(0, 20).map(item => {
+      const enc = item.querySelector('enclosure');
+      const mediaThumbs = item.getElementsByTagNameNS('http://search.yahoo.com/mrss/', 'thumbnail');
+      const img = enc?.getAttribute('url') || mediaThumbs[0]?.getAttribute('url') || null;
+      return {
+        title: item.querySelector('title')?.textContent?.trim() || '',
+        description: (item.querySelector('description')?.textContent || '')
+          .replace(/<[^>]+>/g, '').slice(0, 300),
+        url: item.querySelector('link')?.textContent?.trim() ||
+             item.querySelector('guid')?.textContent?.trim() || '#',
+        urlToImage: img,
+        publishedAt: item.querySelector('pubDate')?.textContent || new Date().toISOString(),
+        source: { name: channelTitle },
+      };
+    }).filter(a => a.title && a.url !== '#');
+  } catch { return []; }
+}
+
+// ─── CORS-safe fetch for JSON endpoints ───────────────────────────────────────
 async function proxiedFetch(url) {
   const strategies = [
-    () => fetch('https://corsproxy.io/?' + encodeURIComponent(url)).then(r => r.json()),
     () => fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(url))
             .then(r => r.json()).then(d => JSON.parse(d.contents)),
-    () => fetch('https://thingproxy.freeboard.io/fetch/' + url).then(r => r.json()),
+    () => fetch('https://corsproxy.io/?' + encodeURIComponent(url)).then(r => r.json()),
   ];
   let last;
   for (const fn of strategies) {
@@ -40,28 +82,11 @@ async function fetchHackerNews() {
     }));
 }
 
-// ─── RSS via rss2json ─────────────────────────────────────────────────────────
+// ─── RSS: fetch raw XML, parse client-side ────────────────────────────────────
 async function fetchRSS(feedUrl) {
-  const url = RSS2JSON + encodeURIComponent(feedUrl) + '&count=20';
-  let data;
-  try {
-    const res = await fetch(url);
-    data = await res.json();
-  } catch {
-    // fallback to proxy
-    data = await proxiedFetch(url);
-  }
-  if (!data?.items?.length) return [];
-  return data.items.map(item => ({
-    title: item.title,
-    description: item.description
-      ? item.description.replace(/<[^>]+>/g, '').slice(0, 300)
-      : '',
-    url: item.link,
-    urlToImage: item.thumbnail || item.enclosure?.link || null,
-    publishedAt: item.pubDate,
-    source: { name: data.feed?.title || feedUrl },
-  }));
+  const xml = await fetchRawXML(feedUrl);
+  if (!xml) return [];
+  return parseRSSXML(xml, feedUrl);
 }
 
 // ─── NewsAPI fallback ─────────────────────────────────────────────────────────
