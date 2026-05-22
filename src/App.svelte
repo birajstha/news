@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import NewsCard from './lib/NewsCard.svelte';
-  import { fetchTopHeadlines, searchNews, translateToNepali } from './lib/api.js';
+  import { fetchTopHeadlines, searchNews, translateToNepali, streamTopHeadlines } from './lib/api.js';
 
   const categories = [
     { id: 'trending',   en: 'Trending 🔥',      ne: 'ट्रेन्डिङ 🔥' },
@@ -103,9 +103,13 @@
     isProxyError = false;
     translations = {};
     translatingCount = 0;
+    articles = [];
     try {
-      articles = await fetchTopHeadlines(category);
-      if (nepali) startTranslating(articles);
+      await streamTopHeadlines(category, (batch) => {
+        articles = batch;
+        loading = false; // show results as soon as first feed arrives
+        if (nepali) startTranslating(batch.filter(a => !translations[a.url]));
+      });
     } catch (e) {
       error = e.message;
       isProxyError = e.message.startsWith('PROXY_FAILED') || e.message.includes('CORS') || e.message.includes('proxy');

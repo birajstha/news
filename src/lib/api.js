@@ -1,26 +1,58 @@
 // ─── Multi-Source Free News Engine ───────────────────────────────────────────
-// Sources: Hacker News API, RSS feeds via rss2json, NewsAPI fallback
-// No paid keys required for HN + RSS. NewsAPI key used as bonus fallback.
+// Sources: Hacker News API, RSS feeds via CF Pages proxy, public fallbacks
+// Strategy: CF Pages Function /api/proxy (edge, fast, cached) → allorigins fallback
 
 const NEWSAPI_KEY = 'e82c77585c5a4d0b95b9254535ddcac4';
 
-// ─── Fetch raw XML through CORS proxy, parse client-side (no rss2json needed) ─
+// ─── In-memory cache to avoid re-fetching within the same session ─────────────
+const _cache = new Map(); // key → { articles, ts }
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function getCached(key) {
+  const hit = _cache.get(key);
+  if (hit && Date.now() - hit.ts < CACHE_TTL) return hit.articles;
+  return null;
+}
+function setCache(key, articles) {
+  _cache.set(key, { articles, ts: Date.now() });
+}
+
+// ─── Fetch raw XML — CF Pages proxy first (edge-cached, fast), then fallbacks ─
 async function fetchRawXML(url) {
-  const proxies = [
-    `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-    `https://corsproxy.io/?${encodeURIComponent(url)}`,
-    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-  ];
-  for (const proxy of proxies) {
-    try {
-      const res = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
-      if (!res.ok) continue;
-      const data = await res.json().catch(() => null);
-      // allorigins wraps in {contents: "..."}
-      const xml = data?.contents ?? await res.text();
+  // 1. Own CF Pages Function — same origin, no CORS, 5-min edge cache
+  try {
+    const res = await fetch(`/api/proxy?url=${encodeURIComponent(url)}`, {
+      signal: AbortSignal.timeout(12000),
+    });
+    if (res.ok) {
+      const xml = await res.text();
       if (xml && xml.includes('<item')) return xml;
-    } catch { /* try next */ }
-  }
+    }
+  } catch { /* fall through */ }
+
+  // 2. allorigins.win fallback
+  try {
+    const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, {
+      signal: AbortSignal.timeout(12000),
+    });
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      const xml = data?.contents;
+      if (xml && xml.includes('<item')) return xml;
+    }
+  } catch { /* fall through */ }
+
+  // 3. corsproxy.io fallback
+  try {
+    const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`, {
+      signal: AbortSignal.timeout(12000),
+    });
+    if (res.ok) {
+      const xml = await res.text();
+      if (xml && xml.includes('<item')) return xml;
+    }
+  } catch { /* fall through */ }
+
   return null;
 }
 
@@ -51,6 +83,8 @@ function parseRSSXML(xml, feedUrl) {
 // ─── CORS-safe fetch for JSON endpoints ───────────────────────────────────────
 async function proxiedFetch(url) {
   const strategies = [
+    () => fetch('/api/proxy?url=' + encodeURIComponent(url), { signal: AbortSignal.timeout(12000) })
+            .then(r => r.json()),
     () => fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(url))
             .then(r => r.json()).then(d => JSON.parse(d.contents)),
     () => fetch('https://corsproxy.io/?' + encodeURIComponent(url)).then(r => r.json()),
@@ -64,10 +98,14 @@ async function proxiedFetch(url) {
 
 // ─── Hacker News ──────────────────────────────────────────────────────────────
 async function fetchHackerNews() {
-  const ids = await fetch('https://hacker-news.firebaseio.com/v0/topstories.json').then(r => r.json());
-  const top30 = ids.slice(0, 30);
+  const ids = await fetch('https://hacker-news.firebaseio.com/v0/topstories.json', {
+    signal: AbortSignal.timeout(8000),
+  }).then(r => r.json());
+  const top20 = ids.slice(0, 20);
   const items = await Promise.allSettled(
-    top30.map(id => fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`).then(r => r.json()))
+    top20.map(id => fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`, {
+      signal: AbortSignal.timeout(5000),
+    }).then(r => r.json()))
   );
   return items
     .filter(r => r.status === 'fulfilled' && r.value?.title && r.value?.url)
@@ -118,7 +156,6 @@ function clean(articles) {
 
 // ─── RSS FEED REGISTRY ────────────────────────────────────────────────────────
 const FEEDS = {
-  // USA news
   usa: [
     'https://feeds.npr.org/1001/rss.xml',
     'http://feeds.washingtonpost.com/rss/politics',
@@ -126,7 +163,6 @@ const FEEDS = {
     'https://feeds.politico.com/politico/rss/politicopicks',
     'https://feeds.a.dj.com/rss/RSSWorldNews.xml',
   ],
-  // Nepal news
   nepal: [
     'https://thehimalayantimes.com/feed/',
     'https://kathmandupost.com/rss',
@@ -134,7 +170,6 @@ const FEEDS = {
     'https://english.onlinekhabar.com/feed',
     'https://risingnepaldaily.com/feed',
   ],
-  // World
   world: [
     'https://feeds.bbci.co.uk/news/world/rss.xml',
     'https://www.aljazeera.com/xml/rss/all.xml',
@@ -142,7 +177,6 @@ const FEEDS = {
     'https://rss.dw.com/rdf/rss-en-all',
     'https://feeds.skynews.com/feeds/rss/world.xml',
   ],
-  // Tech (mix of RSS + Hacker News handled separately)
   technology: [
     'https://techcrunch.com/feed/',
     'https://www.theverge.com/rss/index.xml',
@@ -150,22 +184,19 @@ const FEEDS = {
     'https://www.wired.com/feed/rss',
     'https://feeds.feedburner.com/venturebeat/SZYF',
   ],
-  // Health / Medical
   medical: [
     'https://feeds.webmd.com/rss/rss.aspx?RSSSource=RSS_PUBLIC',
     'https://www.medicalnewstoday.com/rss',
-    'https://feeds.npr.org/1128/rss.xml',       // NPR Health
+    'https://feeds.npr.org/1128/rss.xml',
     'https://feeds.bbci.co.uk/news/health/rss.xml',
     'https://rss.nytimes.com/services/xml/rss/nyt/Health.xml',
   ],
-  // Trending — broad mix
   trending: [
     'https://feeds.bbci.co.uk/news/rss.xml',
     'https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml',
     'https://feeds.npr.org/1001/rss.xml',
     'https://feeds.reuters.com/reuters/topNews',
   ],
-  // Finance / stocks / money
   finance: [
     'https://feeds.bloomberg.com/markets/news.rss',
     'https://www.cnbc.com/id/10000664/device/rss/rss.html',
@@ -173,7 +204,6 @@ const FEEDS = {
     'https://www.investing.com/rss/news_301.rss',
     'https://feeds.finance.yahoo.com/rss/2.0/headline?s=^GSPC,^DJI,^IXIC&region=US&lang=en-US',
   ],
-  // Gossip / entertainment / celebrity — opt-in tab
   gossip: [
     'https://www.tmz.com/rss.xml',
     'https://people.com/feed/',
@@ -183,14 +213,70 @@ const FEEDS = {
   ],
 };
 
+// ─── STREAMING API — calls onBatch(articles) as each feed resolves ────────────
+// This makes the UI show the first results in ~1-2s instead of waiting for all.
+export async function streamTopHeadlines(category, onBatch) {
+  const cached = getCached(category);
+  if (cached) { onBatch(cached); return; }
+
+  const feedUrls = FEEDS[category] || FEEDS.usa;
+  const allArticles = [];
+  let emitted = new Set();
+
+  function emit(newArticles) {
+    const fresh = newArticles.filter(a => a.title && !emitted.has(a.title));
+    if (!fresh.length) return;
+    fresh.forEach(a => emitted.add(a.title));
+    allArticles.push(...fresh);
+    const sorted = clean([...allArticles]).slice(0, 40);
+    onBatch(sorted);
+  }
+
+  if (category === 'technology') {
+    const promises = [
+      fetchHackerNews().then(articles => emit(articles)).catch(() => {}),
+      ...feedUrls.map(url => fetchRSS(url).then(articles => emit(articles)).catch(() => {})),
+    ];
+    await Promise.allSettled(promises);
+  } else {
+    const promises = feedUrls.map(url =>
+      fetchRSS(url).then(articles => emit(articles)).catch(() => {})
+    );
+    await Promise.allSettled(promises);
+
+    if (allArticles.length < 5) {
+      const apiPaths = {
+        usa:      'top-headlines?sources=cnn,nbc-news,abc-news,cbs-news,fox-news&pageSize=30',
+        nepal:    'everything?q=Nepal&sortBy=publishedAt&language=en&pageSize=30',
+        world:    'top-headlines?sources=bbc-news,reuters,associated-press,al-jazeera-english&pageSize=30',
+        medical:  'top-headlines?category=health&language=en&pageSize=30',
+        trending: 'top-headlines?sources=cnn,bbc-news,reuters&pageSize=30',
+        finance:  'top-headlines?category=business&language=en&pageSize=30',
+        gossip:   'top-headlines?category=entertainment&language=en&pageSize=30',
+      };
+      try {
+        const fallback = await fetchNewsAPI(apiPaths[category] || apiPaths.usa);
+        emit(fallback);
+      } catch { /* no-op */ }
+    }
+  }
+
+  const final = clean([...allArticles]).slice(0, 40);
+  setCache(category, final);
+}
+
 // ─── PUBLIC API ───────────────────────────────────────────────────────────────
 export async function fetchTopHeadlines(category) {
+  // Check in-memory cache first
+  const cached = getCached(category);
+  if (cached) return cached;
+
   const feedUrls = FEEDS[category] || FEEDS.usa;
 
   let results;
 
   if (category === 'technology') {
-    // Tech: HN + RSS in parallel
+    // Tech: HN + RSS in parallel — race to first results
     const [hn, ...rssResults] = await Promise.allSettled([
       fetchHackerNews(),
       ...feedUrls.map(fetchRSS),
@@ -199,7 +285,7 @@ export async function fetchTopHeadlines(category) {
     const rssArticles = rssResults.flatMap(r => r.status === 'fulfilled' ? r.value : []);
     results = [...hnArticles.slice(0, 10), ...rssArticles];
   } else {
-    // Other: try RSS feeds in parallel, fallback to NewsAPI
+    // All feeds in parallel
     const settled = await Promise.allSettled(feedUrls.map(fetchRSS));
     const rssArticles = settled.flatMap(r => r.status === 'fulfilled' ? r.value : []);
 
@@ -222,11 +308,12 @@ export async function fetchTopHeadlines(category) {
     }
   }
 
-  return clean(results).slice(0, 40);
+  const final = clean(results).slice(0, 40);
+  setCache(category, final);
+  return final;
 }
 
 export async function searchNews(query) {
-  // Search: try NewsAPI everything endpoint, fallback to filtered trending RSS
   try {
     return clean(await fetchNewsAPI(
       `everything?q=${encodeURIComponent(query)}&sortBy=publishedAt&language=en&pageSize=20`
@@ -245,7 +332,7 @@ export async function translateToNepali(text) {
   if (!text) return text;
   try {
     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ne&dt=t&q=${encodeURIComponent(text)}`;
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     const data = await res.json();
     return data[0].map(d => d[0]).join('');
   } catch { return text; }
