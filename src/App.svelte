@@ -10,7 +10,7 @@
     { id: 'finance',    en: 'Finance 💰',       ne: 'वित्त 💰' },
     { id: 'technology', en: 'Technology 💻',    ne: 'प्रविधि 💻' },
     { id: 'medical',    en: 'Health 🏥',        ne: 'स्वास्थ्य 🏥' },
-    { id: 'trending',   en: 'Trending 🔥',      ne: 'ट्रेन्डिङ 🔥' },
+    { id: 'trending',   en: 'Trending 🔥',      ne: 'ट्रेन्डिङ 🔥', first: true },
     { id: 'gossip',     en: 'Gossip 🌟',        ne: 'गफसफ 🌟' },
   ];
 
@@ -44,7 +44,7 @@
     }
   };
 
-  let activeCategory = 'nepal';
+  let activeCategory = 'trending';
   let articles = [];
   let loading = false;
   let error = '';
@@ -159,7 +159,7 @@
 
   $: t = nepali ? UI.ne : UI.en;
 
-  onMount(() => loadNews('nepal'));
+  onMount(() => loadNews('trending'));
 </script>
 
 <div class="app">
@@ -175,7 +175,7 @@
       </div>
       <div class="nav-actions">
         {#if showInstall}
-          <button class="install-btn" on:click={installApp}>{t.install}</button>
+          <button class="install-icon-btn" on:click={installApp} title={t.install}>📲</button>
         {/if}
         <button class="lang-toggle {nepali ? 'active' : ''}" on:click={toggleNepali}>
           {nepali ? '🇳🇵' : '🇺🇸'}
@@ -307,6 +307,14 @@
     padding: 7px 12px; font-size: 0.75rem; font-weight: 700;
     cursor: pointer; white-space: nowrap;
   }
+
+  .install-icon-btn {
+    background: #0f1923; border: 1px solid #1e2d3d; border-radius: 50%;
+    width: 38px; height: 38px; font-size: 1.1rem;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s; flex-shrink: 0;
+  }
+  .install-icon-btn:hover { border-color: #3a7bd5; background: #1a2a3a; }
 
   .lang-toggle {
     background: #0f1923; border: 1px solid #1e2d3d; border-radius: 50%;
