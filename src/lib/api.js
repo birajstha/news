@@ -140,6 +140,22 @@ const FEEDS = {
     'https://feeds.npr.org/1001/rss.xml',
     'https://feeds.reuters.com/reuters/topNews',
   ],
+  // Finance / stocks / money
+  finance: [
+    'https://feeds.bloomberg.com/markets/news.rss',
+    'https://www.cnbc.com/id/10000664/device/rss/rss.html',
+    'https://feeds.marketwatch.com/marketwatch/topstories/',
+    'https://www.investing.com/rss/news_301.rss',
+    'https://feeds.finance.yahoo.com/rss/2.0/headline?s=^GSPC,^DJI,^IXIC&region=US&lang=en-US',
+  ],
+  // Gossip / entertainment / celebrity — opt-in tab
+  gossip: [
+    'https://www.tmz.com/rss.xml',
+    'https://people.com/feed/',
+    'https://www.eonline.com/syndication/feeds/rssfeeds/topstories.xml',
+    'https://pagesix.com/feed/',
+    'https://www.usmagazine.com/feed/',
+  ],
 };
 
 // ─── PUBLIC API ───────────────────────────────────────────────────────────────
@@ -170,6 +186,8 @@ export async function fetchTopHeadlines(category) {
         world:    'top-headlines?sources=bbc-news,reuters,associated-press,al-jazeera-english&pageSize=30',
         medical:  'top-headlines?category=health&language=en&pageSize=30',
         trending: 'top-headlines?sources=cnn,bbc-news,reuters&pageSize=30',
+        finance:  'top-headlines?category=business&language=en&pageSize=30',
+        gossip:   'top-headlines?category=entertainment&language=en&pageSize=30',
       };
       try {
         results = await fetchNewsAPI(apiPaths[category] || apiPaths.usa);

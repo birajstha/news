@@ -7,9 +7,11 @@
     { id: 'nepal',      en: 'Nepal 🇳🇵',        ne: 'नेपाल 🇳🇵' },
     { id: 'usa',        en: 'USA 🇺🇸',          ne: 'अमेरिका 🇺🇸' },
     { id: 'world',      en: 'World 🌐',         ne: 'विश्व 🌐' },
+    { id: 'finance',    en: 'Finance 💰',       ne: 'वित्त 💰' },
     { id: 'technology', en: 'Technology 💻',    ne: 'प्रविधि 💻' },
     { id: 'medical',    en: 'Health 🏥',        ne: 'स्वास्थ्य 🏥' },
     { id: 'trending',   en: 'Trending 🔥',      ne: 'ट्रेन्डिङ 🔥' },
+    { id: 'gossip',     en: 'Gossip 🌟',        ne: 'गफसफ 🌟' },
   ];
 
   // UI strings in both languages
