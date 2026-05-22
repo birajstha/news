@@ -50,7 +50,7 @@ const KEYWORD_CATEGORIES = {
 export async function fetchTopHeadlines(category = '') {
   if (category && KEYWORD_CATEGORIES[category]) {
     const q = KEYWORD_CATEGORIES[category];
-    return fetchNews(`everything?q=${q}&sortBy=publishedAt&pageSize=20`);
+    return fetchNews(`top-headlines?q=${q}&country=us&pageSize=20`);
   }
   const cat = category && category !== 'all' ? `category=${category}&` : '';
   return fetchNews(`top-headlines?${cat}country=us&pageSize=20`);
