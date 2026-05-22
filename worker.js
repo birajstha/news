@@ -46,7 +46,10 @@ async function handleNews(request, env) {
 
   try {
     const apiUrl = `https://newsapi.org/v2/${path}&apiKey=${apiKey}`;
-    const res = await fetch(apiUrl, { signal: AbortSignal.timeout(10000) });
+    const res = await fetch(apiUrl, {
+      headers: { 'User-Agent': 'HealthyThoughtsNews/1.0' },
+      signal: AbortSignal.timeout(10000),
+    });
     const data = await res.json();
     return new Response(JSON.stringify(data), {
       headers: {
