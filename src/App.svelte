@@ -4,8 +4,8 @@
   import { fetchTopHeadlines, searchNews, translateToNepali } from './lib/api.js';
 
   const categories = [
-    { id: 'usa',        en: 'USA 🇺🇸',          ne: 'अमेरिका 🇺🇸' },
     { id: 'nepal',      en: 'Nepal 🇳🇵',        ne: 'नेपाल 🇳🇵' },
+    { id: 'usa',        en: 'USA 🇺🇸',          ne: 'अमेरिका 🇺🇸' },
     { id: 'world',      en: 'World 🌐',         ne: 'विश्व 🌐' },
     { id: 'technology', en: 'Technology 💻',    ne: 'प्रविधि 💻' },
     { id: 'medical',    en: 'Health 🏥',        ne: 'स्वास्थ्य 🏥' },
@@ -42,7 +42,7 @@
     }
   };
 
-  let activeCategory = 'usa';
+  let activeCategory = 'nepal';
   let articles = [];
   let loading = false;
   let error = '';
@@ -135,14 +135,18 @@
   }
 
   function display(article) {
+    if (!nepali) return article;
     const t = translations[article.url];
     if (!t) return article;
     return { ...article, title: t.title, description: t.description };
   }
 
+  // Reactive derived list — re-renders whenever nepali or translations change
+  $: displayedArticles = articles.map(a => display(a));
+
   $: t = nepali ? UI.ne : UI.en;
 
-  onMount(() => loadNews('usa'));
+  onMount(() => loadNews('nepal'));
 </script>
 
 <div class="app">
@@ -231,9 +235,9 @@
         </div>
       {/if}
       <div class="feed">
-        {#each articles as article (article.url)}
+        {#each displayedArticles as article (article.url)}
           <NewsCard
-            article={display(article)}
+            {article}
             translating={nepali && !translations[article.url]}
             {nepali}
             readMoreLabel={t.readMore}
