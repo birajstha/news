@@ -4,7 +4,7 @@ async function fetchWithFallback(url) {
   const proxies = [
     {
       build: (u) => 'https://corsproxy.io/?' + encodeURIComponent(u),
-      parse: async (res) => await res.json(),
+      parse: async (res) => res.json(),
     },
     {
       build: (u) => 'https://api.allorigins.win/get?url=' + encodeURIComponent(u),
@@ -12,7 +12,7 @@ async function fetchWithFallback(url) {
     },
     {
       build: (u) => 'https://thingproxy.freeboard.io/fetch/' + u,
-      parse: async (res) => await res.json(),
+      parse: async (res) => res.json(),
     },
   ];
   let lastError;
@@ -33,22 +33,38 @@ async function fetchNews(path) {
   const parsed = await fetchWithFallback(url);
   if (parsed.status !== 'ok') throw new Error(parsed.message || 'Failed to fetch news');
   return (parsed.articles || []).filter(a =>
-    a.title && a.title !== '[Removed]' &&
-    !isCelebrity(a.title + ' ' + (a.description || ''))
+    a.title && a.title !== '[Removed]' && !isCelebrity(a)
   );
 }
 
-// Filter out celebrity/gossip/clickbait
-function isCelebrity(text) {
-  const t = text.toLowerCase();
-  const noise = ['celebrity','kardashian','taylor swift','beyonce','justin bieber',
-    'selena gomez','outfit','dating rumor','breakup','pregnancy','baby shower',
-    'red carpet','met gala','bachelor','reality tv','tiktok dance','viral video',
-    'instagram','influencer','gossip','feud','drama'];
-  return noise.some(w => t.includes(w));
+function isCelebrity(a) {
+  const text = ((a.title || '') + ' ' + (a.description || '')).toLowerCase();
+  const noise = ['kardashian','taylor swift','beyonce','justin bieber','selena gomez',
+    'red carpet','met gala','bachelor','tiktok dance','gossip','feud','love island',
+    'reality tv','influencer','breakup rumor','dating rumor','baby shower'];
+  return noise.some(w => text.includes(w));
 }
 
-// Google Translate free endpoint
+// Category → NewsAPI params
+// Using sources= for reliable results (country+q combo returns very few)
+const CATEGORIES = {
+  usa:        'top-headlines?sources=cnn,fox-news,the-washington-post,politico,nbc-news,abc-news,cbs-news&pageSize=30',
+  nepal:      'everything?q=Nepal&sortBy=publishedAt&language=en&pageSize=30',
+  world:      'top-headlines?sources=bbc-news,reuters,associated-press,al-jazeera-english&pageSize=30',
+  technology: 'top-headlines?sources=techcrunch,the-verge,ars-technica,wired&pageSize=30',
+  medical:    'top-headlines?sources=medical-news-today&category=health&q=health+medicine+science&language=en&pageSize=30',
+  trending:   'top-headlines?sources=cnn,bbc-news,the-washington-post,reuters,nbc-news&pageSize=30',
+};
+
+export async function fetchTopHeadlines(category) {
+  const path = CATEGORIES[category] || CATEGORIES.usa;
+  return fetchNews(path);
+}
+
+export async function searchNews(query) {
+  return fetchNews(`everything?q=${encodeURIComponent(query)}&sortBy=publishedAt&language=en&pageSize=20`);
+}
+
 export async function translateToNepali(text) {
   if (!text) return text;
   try {
@@ -59,25 +75,6 @@ export async function translateToNepali(text) {
   } catch {
     return text;
   }
-}
-
-// Category definitions
-const CATEGORIES = {
-  'usa':         { q: 'USA politics economy', country: 'us' },
-  'nepal':       { q: 'Nepal', country: 'us', lang: 'en' },
-  'world':       { q: 'international world', country: 'us' },
-  'technology':  { q: 'technology', country: 'us' },
-  'medical':     { q: 'health medicine science', country: 'us' },
-  'trending':    { q: 'breaking trending', country: 'us' },
-};
-
-export async function fetchTopHeadlines(category = 'usa') {
-  const cfg = CATEGORIES[category] || CATEGORIES['usa'];
-  return fetchNews(`top-headlines?q=${encodeURIComponent(cfg.q)}&country=${cfg.country}&pageSize=30`);
-}
-
-export async function searchNews(query) {
-  return fetchNews(`everything?q=${encodeURIComponent(query)}&sortBy=publishedAt&pageSize=20`);
 }
 
 export function timeAgo(dateStr) {

@@ -4,12 +4,12 @@
   import { fetchTopHeadlines, searchNews, translateToNepali } from './lib/api.js';
 
   const categories = [
-    { id: 'usa',        label: 'अमेरिका 🇺🇸',    nepali: 'अमेरिका' },
-    { id: 'nepal',      label: 'नेपाल 🇳🇵',       nepali: 'नेपाल' },
-    { id: 'world',      label: 'विश्व 🌐',         nepali: 'विश्व' },
-    { id: 'technology', label: 'प्रविधि 💻',       nepali: 'प्रविधि' },
-    { id: 'medical',    label: 'स्वास्थ्य 🏥',     nepali: 'स्वास्थ्य' },
-    { id: 'trending',   label: 'ट्रेन्डिङ 🔥',    nepali: 'ट्रेन्डिङ' },
+    { id: 'usa',        en: 'USA 🇺🇸',          ne: 'अमेरिका 🇺🇸' },
+    { id: 'nepal',      en: 'Nepal 🇳🇵',        ne: 'नेपाल 🇳🇵' },
+    { id: 'world',      en: 'World 🌐',         ne: 'विश्व 🌐' },
+    { id: 'technology', en: 'Technology 💻',    ne: 'प्रविधि 💻' },
+    { id: 'medical',    en: 'Health 🏥',        ne: 'स्वास्थ्य 🏥' },
+    { id: 'trending',   en: 'Trending 🔥',      ne: 'ट्रेन्डिङ 🔥' },
   ];
 
   // UI strings in both languages
@@ -184,7 +184,7 @@
         <button
           class="tab {activeCategory === cat.id ? 'active' : ''}"
           on:click={() => setCategory(cat.id)}
-        >{cat.label}</button>
+        >{nepali ? cat.ne : cat.en}</button>
       {/each}
     </div>
   </nav>
