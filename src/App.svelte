@@ -22,16 +22,36 @@
   let searchQuery = '';
   let searchTimeout;
   let nepali = false;
-  let translating = false;
-  let translatedArticles = [];
+  // Map of article URL -> translated {title, description}
+  let translations = {};
+  let translatingCount = 0;
+
+  async function translateArticle(article) {
+    if (translations[article.url]) return; // already done
+    translatingCount += 1;
+    const [title, description] = await Promise.all([
+      translateToNepali(article.title),
+      article.description ? translateToNepali(article.description) : Promise.resolve(article.description),
+    ]);
+    translations[article.url] = { title, description };
+    translations = translations; // trigger reactivity
+    translatingCount -= 1;
+  }
+
+  function startTranslating(list) {
+    // Translate all articles concurrently — each one updates as it arrives
+    for (const a of list) {
+      translateArticle(a);
+    }
+  }
 
   async function loadNews(category) {
     loading = true;
     error = '';
-    translatedArticles = [];
-    nepali = false;
+    translations = {};
     try {
       articles = await fetchTopHeadlines(category);
+      if (nepali) startTranslating(articles);
     } catch (e) {
       error = e.message;
       articles = [];
@@ -54,10 +74,10 @@
     searchTimeout = setTimeout(async () => {
       loading = true;
       error = '';
-      translatedArticles = [];
-      nepali = false;
+      translations = {};
       try {
         articles = await searchNews(searchQuery.trim());
+        if (nepali) startTranslating(articles);
       } catch (e) {
         error = e.message;
         articles = [];
@@ -66,28 +86,17 @@
     }, 500);
   }
 
-  async function toggleNepali() {
-    if (nepali) {
-      nepali = false;
-      return;
-    }
-    if (translatedArticles.length === articles.length && translatedArticles.length > 0) {
-      nepali = true;
-      return;
-    }
-    translating = true;
-    translatedArticles = await Promise.all(
-      articles.map(async (a) => ({
-        ...a,
-        title: await translateToNepali(a.title),
-        description: a.description ? await translateToNepali(a.description) : a.description,
-      }))
-    );
-    translating = false;
-    nepali = true;
+  function toggleNepali() {
+    nepali = !nepali;
+    if (nepali) startTranslating(articles);
   }
 
-  $: displayArticles = nepali ? translatedArticles : articles;
+  // For each article, return translated version if available, else original
+  function display(article) {
+    const t = translations[article.url];
+    if (!t) return article;
+    return { ...article, title: t.title, description: t.description };
+  }
 
   onMount(() => loadNews('all'));
 </script>
@@ -111,9 +120,9 @@
           />
           <span class="search-icon">🔍</span>
         </div>
-        <button class="lang-toggle {nepali ? 'active' : ''}" on:click={toggleNepali} disabled={translating}>
-          {#if translating}
-            <span class="mini-spinner"></span>
+        <button class="lang-toggle {nepali ? 'active' : ''}" on:click={toggleNepali}>
+          {#if nepali && translatingCount > 0}
+            <span class="mini-spinner"></span> {translatingCount} left
           {:else}
             {nepali ? '🇳🇵 नेपाली' : '🇺🇸 English'}
           {/if}
@@ -150,14 +159,14 @@
         <p>⚠️ {error}</p>
         <button on:click={() => loadNews(activeCategory)}>Retry</button>
       </div>
-    {:else if displayArticles.length === 0}
+    {:else if articles.length === 0}
       <div class="state-center">
         <p>No articles found.</p>
       </div>
     {:else}
       <div class="grid">
-        {#each displayArticles.filter(a => a.title && a.title !== '[Removed]') as article (article.url)}
-          <NewsCard {article} />
+        {#each articles.filter(a => a.title && a.title !== '[Removed]') as article (article.url)}
+          <NewsCard article={display(article)} translating={nepali && !translations[article.url]} />
         {/each}
       </div>
     {/if}
@@ -175,7 +184,6 @@
 
   .app { min-height: 100vh; display: flex; flex-direction: column; }
 
-  /* Navbar */
   .navbar {
     position: sticky; top: 0; z-index: 100;
     background: rgba(6, 13, 20, 0.95);
@@ -193,96 +201,59 @@
   .accent { color: #3a7bd5; }
 
   .nav-right { display: flex; align-items: center; gap: 12px; flex: 1; justify-content: flex-end; }
-
   .search-wrap { position: relative; flex: 1; max-width: 360px; }
   .search-input {
-    width: 100%;
-    background: #0f1923;
-    border: 1px solid #1e2d3d;
-    border-radius: 8px;
-    color: #c8d6e5;
-    padding: 9px 36px 9px 14px;
-    font-size: 0.88rem;
-    outline: none;
-    transition: border-color 0.2s;
+    width: 100%; background: #0f1923; border: 1px solid #1e2d3d;
+    border-radius: 8px; color: #c8d6e5; padding: 9px 36px 9px 14px;
+    font-size: 0.88rem; outline: none; transition: border-color 0.2s;
   }
   .search-input:focus { border-color: #3a7bd5; }
   .search-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); opacity: 0.5; pointer-events: none; }
 
-  /* Language Toggle */
   .lang-toggle {
-    background: #0f1923;
-    border: 1px solid #1e2d3d;
-    border-radius: 20px;
-    color: #7a8fa8;
-    padding: 7px 16px;
-    font-size: 0.82rem;
-    font-weight: 600;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: all 0.2s;
-    display: flex; align-items: center; gap: 6px;
+    background: #0f1923; border: 1px solid #1e2d3d; border-radius: 20px;
+    color: #7a8fa8; padding: 7px 16px; font-size: 0.82rem; font-weight: 600;
+    cursor: pointer; white-space: nowrap; transition: all 0.2s;
+    display: flex; align-items: center; gap: 6px; min-width: 110px; justify-content: center;
   }
   .lang-toggle:hover { border-color: #3a7bd5; color: #c8d6e5; }
   .lang-toggle.active { background: #3a7bd5; border-color: #3a7bd5; color: #fff; }
-  .lang-toggle:disabled { opacity: 0.6; cursor: not-allowed; }
 
   .mini-spinner {
-    width: 14px; height: 14px;
+    width: 12px; height: 12px;
     border: 2px solid rgba(255,255,255,0.3);
-    border-top-color: #fff;
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-    display: inline-block;
+    border-top-color: #fff; border-radius: 50%;
+    animation: spin 0.7s linear infinite; display: inline-block;
   }
 
   .category-tabs {
     max-width: 1200px; margin: 0 auto;
-    padding: 0 20px 10px;
-    display: flex; gap: 6px; flex-wrap: wrap;
+    padding: 0 20px 10px; display: flex; gap: 6px; flex-wrap: wrap;
   }
   .tab {
-    background: transparent;
-    border: 1px solid #1e2d3d;
-    border-radius: 20px;
-    color: #7a8fa8;
-    padding: 6px 16px;
-    font-size: 0.82rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
+    background: transparent; border: 1px solid #1e2d3d; border-radius: 20px;
+    color: #7a8fa8; padding: 6px 16px; font-size: 0.82rem; font-weight: 500;
+    cursor: pointer; transition: all 0.2s;
   }
   .tab:hover { border-color: #3a7bd5; color: #c8d6e5; }
   .tab.active { background: #3a7bd5; border-color: #3a7bd5; color: #fff; font-weight: 600; }
 
-  /* Hero */
   .hero {
-    text-align: center;
-    padding: 60px 20px 40px;
+    text-align: center; padding: 60px 20px 40px;
     background: radial-gradient(ellipse at 50% 0%, rgba(58, 123, 213, 0.12) 0%, transparent 70%);
   }
   .hero-title { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 900; line-height: 1.15; color: #e8edf2; margin-bottom: 14px; }
   .gradient-text {
     background: linear-gradient(135deg, #3a7bd5 0%, #00d2ff 50%, #a855f7 100%);
-    background-size: 200% 200%;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    background-size: 200% 200%; -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent; background-clip: text;
     animation: gradShift 4s ease infinite;
   }
-  @keyframes gradShift {
-    0%, 100% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-  }
+  @keyframes gradShift { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
   .hero-sub { color: #7a8fa8; font-size: 1rem; max-width: 500px; margin: 0 auto; }
 
-  /* Main */
   .main { flex: 1; max-width: 1200px; margin: 0 auto; width: 100%; padding: 24px 20px 48px; }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 24px;
-  }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
   @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
 
@@ -296,27 +267,17 @@
     padding: 10px 24px; cursor: pointer; font-size: 0.9rem;
   }
   .spinner {
-    width: 40px; height: 40px;
-    border: 3px solid #1e2d3d;
-    border-top-color: #3a7bd5;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
+    width: 40px; height: 40px; border: 3px solid #1e2d3d;
+    border-top-color: #3a7bd5; border-radius: 50%; animation: spin 0.8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* Footer */
-  .footer {
-    text-align: center;
-    padding: 24px;
-    border-top: 1px solid #1a2a3a;
-    color: #4a6080;
-    font-size: 0.82rem;
-  }
+  .footer { text-align: center; padding: 24px; border-top: 1px solid #1a2a3a; color: #4a6080; font-size: 0.82rem; }
   .footer a { color: #3a7bd5; text-decoration: none; }
   .footer a:hover { text-decoration: underline; }
 
   @media (max-width: 560px) {
     .nav-right { gap: 8px; }
-    .lang-toggle { padding: 7px 10px; font-size: 0.78rem; }
+    .lang-toggle { padding: 7px 10px; font-size: 0.78rem; min-width: 90px; }
   }
 </style>
