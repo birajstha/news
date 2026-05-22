@@ -2,14 +2,12 @@ import { defineConfig } from 'vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { VitePWA } from 'vite-plugin-pwa'
 
-import { cloudflare } from "@cloudflare/vite-plugin";
-
 export default defineConfig({
-  base: '/news/',
+  base: '/',
   plugins: [svelte(), VitePWA({
     registerType: 'autoUpdate',
-    base: '/news/',
-    scope: '/news/',
+    base: '/',
+    scope: '/',
     manifest: {
       name: 'Healthy Thoughts — नेपाली समाचार',
       short_name: 'HealthyThoughts',
@@ -17,16 +15,16 @@ export default defineConfig({
       theme_color: '#060d14',
       background_color: '#060d14',
       display: 'standalone',
-      start_url: '/news/',
-      scope: '/news/',
+      start_url: '/',
+      scope: '/',
       icons: [
-        { src: '/news/icon-192.png', sizes: '192x192', type: 'image/png' },
-        { src: '/news/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+        { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+        { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
       ]
     },
     workbox: {
-      navigateFallback: '/news/index.html',
+      navigateFallback: '/index.html',
       globPatterns: ['**/*.{js,css,html,svg,png,ico}']
     }
-  }), cloudflare()]
+  })]
 })
