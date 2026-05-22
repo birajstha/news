@@ -308,6 +308,7 @@
     backdrop-filter: blur(16px);
     border-bottom: 1px solid #1a2a3a;
     padding-bottom: 8px;
+    padding-top: env(safe-area-inset-top, 0px);
   }
   .nav-top {
     display: flex; align-items: center; justify-content: space-between;
