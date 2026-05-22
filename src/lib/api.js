@@ -39,7 +39,20 @@ async function fetchNews(path) {
   return parsed.articles || [];
 }
 
-// Keyword categories that use /v2/everything
+// Translate text to Nepali using Google Translate (free, no key needed)
+export async function translateToNepali(text) {
+  if (!text) return text;
+  try {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ne&dt=t&q=${encodeURIComponent(text)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    return data[0].map(d => d[0]).join('');
+  } catch {
+    return text; // fallback to original
+  }
+}
+
+// Keyword categories that use /v2/top-headlines with q=
 const KEYWORD_CATEGORIES = {
   neurotech: 'neurotechnology',
   brain: 'brain+neuroscience',

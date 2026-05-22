@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import NewsCard from './lib/NewsCard.svelte';
-  import { fetchTopHeadlines, searchNews } from './lib/api.js';
+  import { fetchTopHeadlines, searchNews, translateToNepali } from './lib/api.js';
 
   const categories = [
     { id: 'all', label: 'All' },
@@ -21,10 +21,15 @@
   let error = '';
   let searchQuery = '';
   let searchTimeout;
+  let nepali = false;
+  let translating = false;
+  let translatedArticles = [];
 
   async function loadNews(category) {
     loading = true;
     error = '';
+    translatedArticles = [];
+    nepali = false;
     try {
       articles = await fetchTopHeadlines(category);
     } catch (e) {
@@ -49,6 +54,8 @@
     searchTimeout = setTimeout(async () => {
       loading = true;
       error = '';
+      translatedArticles = [];
+      nepali = false;
       try {
         articles = await searchNews(searchQuery.trim());
       } catch (e) {
@@ -58,6 +65,29 @@
       loading = false;
     }, 500);
   }
+
+  async function toggleNepali() {
+    if (nepali) {
+      nepali = false;
+      return;
+    }
+    if (translatedArticles.length === articles.length && translatedArticles.length > 0) {
+      nepali = true;
+      return;
+    }
+    translating = true;
+    translatedArticles = await Promise.all(
+      articles.map(async (a) => ({
+        ...a,
+        title: await translateToNepali(a.title),
+        description: a.description ? await translateToNepali(a.description) : a.description,
+      }))
+    );
+    translating = false;
+    nepali = true;
+  }
+
+  $: displayArticles = nepali ? translatedArticles : articles;
 
   onMount(() => loadNews('all'));
 </script>
@@ -70,15 +100,24 @@
         <span class="brand-icon">📰</span>
         <span class="brand-name">Biraj<span class="accent">News</span></span>
       </div>
-      <div class="search-wrap">
-        <input
-          type="text"
-          class="search-input"
-          placeholder="Search news..."
-          bind:value={searchQuery}
-          on:input={handleSearch}
-        />
-        <span class="search-icon">🔍</span>
+      <div class="nav-right">
+        <div class="search-wrap">
+          <input
+            type="text"
+            class="search-input"
+            placeholder="Search news..."
+            bind:value={searchQuery}
+            on:input={handleSearch}
+          />
+          <span class="search-icon">🔍</span>
+        </div>
+        <button class="lang-toggle {nepali ? 'active' : ''}" on:click={toggleNepali} disabled={translating}>
+          {#if translating}
+            <span class="mini-spinner"></span>
+          {:else}
+            {nepali ? '🇳🇵 नेपाली' : '🇺🇸 English'}
+          {/if}
+        </button>
       </div>
     </div>
     <div class="category-tabs">
@@ -111,13 +150,13 @@
         <p>⚠️ {error}</p>
         <button on:click={() => loadNews(activeCategory)}>Retry</button>
       </div>
-    {:else if articles.length === 0}
+    {:else if displayArticles.length === 0}
       <div class="state-center">
         <p>No articles found.</p>
       </div>
     {:else}
       <div class="grid">
-        {#each articles.filter(a => a.title && a.title !== '[Removed]') as article (article.url)}
+        {#each displayArticles.filter(a => a.title && a.title !== '[Removed]') as article (article.url)}
           <NewsCard {article} />
         {/each}
       </div>
@@ -153,6 +192,8 @@
   .brand-name { font-size: 1.4rem; font-weight: 800; color: #e8edf2; letter-spacing: -0.5px; }
   .accent { color: #3a7bd5; }
 
+  .nav-right { display: flex; align-items: center; gap: 12px; flex: 1; justify-content: flex-end; }
+
   .search-wrap { position: relative; flex: 1; max-width: 360px; }
   .search-input {
     width: 100%;
@@ -167,6 +208,33 @@
   }
   .search-input:focus { border-color: #3a7bd5; }
   .search-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); opacity: 0.5; pointer-events: none; }
+
+  /* Language Toggle */
+  .lang-toggle {
+    background: #0f1923;
+    border: 1px solid #1e2d3d;
+    border-radius: 20px;
+    color: #7a8fa8;
+    padding: 7px 16px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .lang-toggle:hover { border-color: #3a7bd5; color: #c8d6e5; }
+  .lang-toggle.active { background: #3a7bd5; border-color: #3a7bd5; color: #fff; }
+  .lang-toggle:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .mini-spinner {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: inline-block;
+  }
 
   .category-tabs {
     max-width: 1200px; margin: 0 auto;
@@ -246,4 +314,9 @@
   }
   .footer a { color: #3a7bd5; text-decoration: none; }
   .footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 560px) {
+    .nav-right { gap: 8px; }
+    .lang-toggle { padding: 7px 10px; font-size: 0.78rem; }
+  }
 </style>
