@@ -4,56 +4,103 @@
   import { fetchTopHeadlines, searchNews, translateToNepali } from './lib/api.js';
 
   const categories = [
-    { id: 'all', label: 'All' },
-    { id: 'technology', label: 'Technology' },
-    { id: 'ai', label: 'AI' },
-    { id: 'science', label: 'Science' },
-    { id: 'business', label: 'Business' },
-    { id: 'sports', label: 'Sports' },
-    { id: 'neurotech', label: 'Neurotech' },
-    { id: 'brain', label: 'Brain' },
-    { id: 'mental-health', label: 'Mental Health' },
+    { id: 'usa',        label: 'अमेरिका 🇺🇸',    nepali: 'अमेरिका' },
+    { id: 'nepal',      label: 'नेपाल 🇳🇵',       nepali: 'नेपाल' },
+    { id: 'world',      label: 'विश्व 🌐',         nepali: 'विश्व' },
+    { id: 'technology', label: 'प्रविधि 💻',       nepali: 'प्रविधि' },
+    { id: 'medical',    label: 'स्वास्थ्य 🏥',     nepali: 'स्वास्थ्य' },
+    { id: 'trending',   label: 'ट्रेन्डिङ 🔥',    nepali: 'ट्रेन्डिङ' },
   ];
 
-  let activeCategory = 'all';
+  // UI strings in both languages
+  const UI = {
+    en: {
+      title: 'BirajNews',
+      tagline: 'USA & Nepal News for Nepalis Worldwide',
+      search: 'Search news...',
+      loading: 'Loading news…',
+      noArticles: 'No articles found.',
+      readMore: 'Read More',
+      install: '📲 Install App',
+      langBtn: '🇺🇸 English',
+      freeService: 'This app uses free news services which can be unreliable.',
+      refresh: 'Tap to refresh',
+      ago: 'ago',
+    },
+    ne: {
+      title: 'BirajNews',
+      tagline: 'विश्वभरका नेपालीहरूका लागि USA र नेपाल समाचार',
+      search: 'समाचार खोज्नुहोस्...',
+      loading: 'समाचार लोड हुँदैछ…',
+      noArticles: 'कुनै समाचार फेला परेन।',
+      readMore: 'थप पढ्नुहोस्',
+      install: '📲 एप इन्स्टल गर्नुहोस्',
+      langBtn: '🇳🇵 नेपाली',
+      freeService: 'यो एप नि:शुल्क सेवाहरू प्रयोग गर्छ जुन कहिलेकाहीँ अविश्वसनीय हुन सक्छ।',
+      refresh: 'रिफ्रेस गर्न थिच्नुहोस्',
+      ago: 'अघि',
+    }
+  };
+
+  let activeCategory = 'usa';
   let articles = [];
   let loading = false;
   let error = '';
+  let isProxyError = false;
   let searchQuery = '';
   let searchTimeout;
-  let nepali = false;
-  // Map of article URL -> translated {title, description}
+  let nepali = true; // DEFAULT: Nepali
   let translations = {};
   let translatingCount = 0;
+  let deferredInstall = null;
+  let showInstall = false;
+
+  // PWA install prompt
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstall = e;
+      showInstall = true;
+    });
+    window.addEventListener('appinstalled', () => { showInstall = false; });
+  }
+
+  async function installApp() {
+    if (!deferredInstall) return;
+    deferredInstall.prompt();
+    const { outcome } = await deferredInstall.userChoice;
+    if (outcome === 'accepted') showInstall = false;
+    deferredInstall = null;
+  }
 
   async function translateArticle(article) {
-    if (translations[article.url]) return; // already done
+    if (translations[article.url]) return;
     translatingCount += 1;
     const [title, description] = await Promise.all([
       translateToNepali(article.title),
       article.description ? translateToNepali(article.description) : Promise.resolve(article.description),
     ]);
     translations[article.url] = { title, description };
-    translations = translations; // trigger reactivity
-    translatingCount -= 1;
+    translations = { ...translations };
+    translatingCount = Math.max(0, translatingCount - 1);
   }
 
   function startTranslating(list) {
-    // Translate all articles concurrently — each one updates as it arrives
-    for (const a of list) {
-      translateArticle(a);
-    }
+    for (const a of list) translateArticle(a);
   }
 
   async function loadNews(category) {
     loading = true;
     error = '';
+    isProxyError = false;
     translations = {};
+    translatingCount = 0;
     try {
       articles = await fetchTopHeadlines(category);
       if (nepali) startTranslating(articles);
     } catch (e) {
       error = e.message;
+      isProxyError = e.message.startsWith('PROXY_FAILED') || e.message.includes('CORS') || e.message.includes('proxy');
       articles = [];
     }
     loading = false;
@@ -67,19 +114,15 @@
 
   function handleSearch() {
     clearTimeout(searchTimeout);
-    if (!searchQuery.trim()) {
-      loadNews(activeCategory);
-      return;
-    }
+    if (!searchQuery.trim()) { loadNews(activeCategory); return; }
     searchTimeout = setTimeout(async () => {
-      loading = true;
-      error = '';
-      translations = {};
+      loading = true; error = ''; isProxyError = false; translations = {};
       try {
         articles = await searchNews(searchQuery.trim());
         if (nepali) startTranslating(articles);
       } catch (e) {
         error = e.message;
+        isProxyError = e.message.startsWith('PROXY_FAILED');
         articles = [];
       }
       loading = false;
@@ -91,44 +134,51 @@
     if (nepali) startTranslating(articles);
   }
 
-  // For each article, return translated version if available, else original
   function display(article) {
     const t = translations[article.url];
     if (!t) return article;
     return { ...article, title: t.title, description: t.description };
   }
 
-  onMount(() => loadNews('all'));
+  $: t = nepali ? UI.ne : UI.en;
+
+  onMount(() => loadNews('usa'));
 </script>
 
 <div class="app">
   <!-- Navbar -->
   <nav class="navbar">
-    <div class="nav-inner">
+    <div class="nav-top">
       <div class="brand">
         <span class="brand-icon">📰</span>
-        <span class="brand-name">Biraj<span class="accent">News</span></span>
-      </div>
-      <div class="nav-right">
-        <div class="search-wrap">
-          <input
-            type="text"
-            class="search-input"
-            placeholder="Search news..."
-            bind:value={searchQuery}
-            on:input={handleSearch}
-          />
-          <span class="search-icon">🔍</span>
+        <div class="brand-text">
+          <span class="brand-name">Biraj<span class="accent">News</span></span>
+          <span class="brand-tag">{t.tagline}</span>
         </div>
+      </div>
+      <div class="nav-actions">
+        {#if showInstall}
+          <button class="install-btn" on:click={installApp}>{t.install}</button>
+        {/if}
         <button class="lang-toggle {nepali ? 'active' : ''}" on:click={toggleNepali}>
-          {#if nepali && translatingCount > 0}
-            <span class="mini-spinner"></span> {translatingCount} left
-          {:else}
-            {nepali ? '🇳🇵 नेपाली' : '🇺🇸 English'}
-          {/if}
+          {nepali ? '🇳🇵' : '🇺🇸'}
         </button>
       </div>
     </div>
+
+    <div class="search-row">
+      <div class="search-wrap">
+        <input
+          type="search"
+          class="search-input"
+          placeholder={t.search}
+          bind:value={searchQuery}
+          on:input={handleSearch}
+        />
+        <span class="search-icon">🔍</span>
+      </div>
+    </div>
+
     <div class="category-tabs">
       {#each categories as cat}
         <button
@@ -139,145 +189,186 @@
     </div>
   </nav>
 
-  <!-- Hero -->
-  <header class="hero">
-    <h1 class="hero-title">
-      Stay <span class="gradient-text">Informed</span>,<br />Stay <span class="gradient-text">Ahead</span>
-    </h1>
-    <p class="hero-sub">Breaking news, trending stories, and in-depth coverage — all in one place.</p>
-  </header>
-
   <!-- Main -->
   <main class="main">
     {#if loading}
       <div class="state-center">
         <div class="spinner"></div>
-        <p>Loading latest news…</p>
+        <p>{t.loading}</p>
       </div>
+
     {:else if error}
       <div class="state-center error">
-        <p>⚠️ {error}</p>
-        <button on:click={() => loadNews(activeCategory)}>Retry</button>
+        {#if isProxyError}
+          <div class="error-icon">📡</div>
+          <p class="error-title">{t.freeService}</p>
+          <p class="error-sub">{t.refresh}</p>
+        {:else}
+          <div class="error-icon">⚠️</div>
+          <p class="error-title">{error}</p>
+          <p class="error-sub">{t.freeService}</p>
+        {/if}
+        <button class="refresh-btn" on:click={() => loadNews(activeCategory)}>
+          🔄 {nepali ? 'रिफ्रेस' : 'Refresh'}
+        </button>
       </div>
+
     {:else if articles.length === 0}
       <div class="state-center">
-        <p>No articles found.</p>
+        <div class="error-icon">🔍</div>
+        <p class="error-title">{t.noArticles}</p>
+        <p class="error-sub">{t.freeService}</p>
+        <button class="refresh-btn" on:click={() => loadNews(activeCategory)}>
+          🔄 {nepali ? 'रिफ्रेस' : 'Refresh'}
+        </button>
       </div>
+
     {:else}
-      <div class="grid">
-        {#each articles.filter(a => a.title && a.title !== '[Removed]') as article (article.url)}
-          <NewsCard article={display(article)} translating={nepali && !translations[article.url]} />
+      {#if nepali && translatingCount > 0}
+        <div class="translate-bar">
+          <div class="mini-spinner"></div>
+          {translatingCount} {nepali ? 'समाचार अनुवाद हुँदैछ…' : 'translating…'}
+        </div>
+      {/if}
+      <div class="feed">
+        {#each articles as article (article.url)}
+          <NewsCard
+            article={display(article)}
+            translating={nepali && !translations[article.url]}
+            {nepali}
+            readMoreLabel={t.readMore}
+          />
         {/each}
       </div>
     {/if}
   </main>
 
-  <!-- Footer -->
   <footer class="footer">
-    <p>© 2026 BirajNews &nbsp;·&nbsp; Powered by <a href="https://newsapi.org" target="_blank">NewsAPI</a></p>
+    <p>© 2026 BirajNews · <a href="https://newsapi.org" target="_blank">NewsAPI</a></p>
   </footer>
 </div>
 
 <style>
   :global(*, *::before, *::after) { box-sizing: border-box; margin: 0; padding: 0; }
-  :global(body) { background: #060d14; color: #c8d6e5; font-family: 'Inter', system-ui, sans-serif; }
+  :global(html) { font-size: 16px; }
+  :global(body) {
+    background: #060d14;
+    color: #c8d6e5;
+    font-family: 'Noto Sans Devanagari', 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  :global(a) { color: inherit; }
 
   .app { min-height: 100vh; display: flex; flex-direction: column; }
 
+  /* Navbar */
   .navbar {
     position: sticky; top: 0; z-index: 100;
-    background: rgba(6, 13, 20, 0.95);
-    backdrop-filter: blur(12px);
+    background: rgba(6, 13, 20, 0.97);
+    backdrop-filter: blur(16px);
     border-bottom: 1px solid #1a2a3a;
+    padding-bottom: 8px;
   }
-  .nav-inner {
-    max-width: 1200px; margin: 0 auto;
-    padding: 14px 20px;
-    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  .nav-top {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px 8px;
+    gap: 12px;
   }
-  .brand { display: flex; align-items: center; gap: 10px; }
-  .brand-icon { font-size: 1.5rem; }
-  .brand-name { font-size: 1.4rem; font-weight: 800; color: #e8edf2; letter-spacing: -0.5px; }
+  .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .brand-icon { font-size: 1.8rem; flex-shrink: 0; }
+  .brand-text { display: flex; flex-direction: column; min-width: 0; }
+  .brand-name { font-size: 1.3rem; font-weight: 900; color: #e8edf2; letter-spacing: -0.5px; }
   .accent { color: #3a7bd5; }
+  .brand-tag { font-size: 0.65rem; color: #4a6080; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-  .nav-right { display: flex; align-items: center; gap: 12px; flex: 1; justify-content: flex-end; }
-  .search-wrap { position: relative; flex: 1; max-width: 360px; }
-  .search-input {
-    width: 100%; background: #0f1923; border: 1px solid #1e2d3d;
-    border-radius: 8px; color: #c8d6e5; padding: 9px 36px 9px 14px;
-    font-size: 0.88rem; outline: none; transition: border-color 0.2s;
+  .nav-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+  .install-btn {
+    background: linear-gradient(135deg, #3a7bd5, #00d2ff);
+    border: none; border-radius: 20px; color: #fff;
+    padding: 7px 12px; font-size: 0.75rem; font-weight: 700;
+    cursor: pointer; white-space: nowrap;
   }
-  .search-input:focus { border-color: #3a7bd5; }
-  .search-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); opacity: 0.5; pointer-events: none; }
 
   .lang-toggle {
-    background: #0f1923; border: 1px solid #1e2d3d; border-radius: 20px;
-    color: #7a8fa8; padding: 7px 16px; font-size: 0.82rem; font-weight: 600;
-    cursor: pointer; white-space: nowrap; transition: all 0.2s;
-    display: flex; align-items: center; gap: 6px; min-width: 110px; justify-content: center;
+    background: #0f1923; border: 1px solid #1e2d3d; border-radius: 50%;
+    width: 38px; height: 38px; font-size: 1.2rem;
+    cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center;
   }
-  .lang-toggle:hover { border-color: #3a7bd5; color: #c8d6e5; }
-  .lang-toggle.active { background: #3a7bd5; border-color: #3a7bd5; color: #fff; }
+  .lang-toggle:hover, .lang-toggle.active { border-color: #3a7bd5; background: #1a2a3a; }
 
-  .mini-spinner {
-    width: 12px; height: 12px;
-    border: 2px solid rgba(255,255,255,0.3);
-    border-top-color: #fff; border-radius: 50%;
-    animation: spin 0.7s linear infinite; display: inline-block;
+  .search-row { padding: 0 16px 8px; }
+  .search-wrap { position: relative; }
+  .search-input {
+    width: 100%; background: #0f1923; border: 1px solid #1e2d3d;
+    border-radius: 12px; color: #c8d6e5;
+    padding: 12px 44px 12px 16px;
+    font-size: 1rem; outline: none; transition: border-color 0.2s;
+    -webkit-appearance: none;
   }
+  .search-input:focus { border-color: #3a7bd5; }
+  .search-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); opacity: 0.4; pointer-events: none; font-size: 1.1rem; }
 
+  /* Category tabs - scrollable horizontal */
   .category-tabs {
-    max-width: 1200px; margin: 0 auto;
-    padding: 0 20px 10px; display: flex; gap: 6px; flex-wrap: wrap;
+    display: flex; gap: 8px; overflow-x: auto; padding: 0 16px;
+    scrollbar-width: none; -ms-overflow-style: none;
   }
+  .category-tabs::-webkit-scrollbar { display: none; }
   .tab {
     background: transparent; border: 1px solid #1e2d3d; border-radius: 20px;
-    color: #7a8fa8; padding: 6px 16px; font-size: 0.82rem; font-weight: 500;
-    cursor: pointer; transition: all 0.2s;
+    color: #7a8fa8; padding: 8px 16px; font-size: 0.9rem; font-weight: 600;
+    cursor: pointer; transition: all 0.2s; white-space: nowrap; flex-shrink: 0;
+    font-family: inherit;
   }
   .tab:hover { border-color: #3a7bd5; color: #c8d6e5; }
-  .tab.active { background: #3a7bd5; border-color: #3a7bd5; color: #fff; font-weight: 600; }
+  .tab.active { background: #3a7bd5; border-color: #3a7bd5; color: #fff; }
 
-  .hero {
-    text-align: center; padding: 60px 20px 40px;
-    background: radial-gradient(ellipse at 50% 0%, rgba(58, 123, 213, 0.12) 0%, transparent 70%);
+  /* Main feed */
+  .main { flex: 1; padding: 16px; max-width: 680px; margin: 0 auto; width: 100%; }
+
+  .translate-bar {
+    display: flex; align-items: center; gap: 10px;
+    background: #0f1923; border: 1px solid #1e2d3d; border-radius: 10px;
+    padding: 10px 16px; margin-bottom: 16px; font-size: 0.9rem; color: #7a8fa8;
   }
-  .hero-title { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 900; line-height: 1.15; color: #e8edf2; margin-bottom: 14px; }
-  .gradient-text {
-    background: linear-gradient(135deg, #3a7bd5 0%, #00d2ff 50%, #a855f7 100%);
-    background-size: 200% 200%; -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent; background-clip: text;
-    animation: gradShift 4s ease infinite;
+  .mini-spinner {
+    width: 16px; height: 16px; border: 2px solid #1e2d3d;
+    border-top-color: #3a7bd5; border-radius: 50%;
+    animation: spin 0.7s linear infinite; flex-shrink: 0;
   }
-  @keyframes gradShift { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
-  .hero-sub { color: #7a8fa8; font-size: 1rem; max-width: 500px; margin: 0 auto; }
 
-  .main { flex: 1; max-width: 1200px; margin: 0 auto; width: 100%; padding: 24px 20px 48px; }
-  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
-  @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+  .feed { display: flex; flex-direction: column; gap: 12px; }
 
+  /* States */
   .state-center {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    min-height: 300px; gap: 16px; color: #4a6080;
+    min-height: 60vh; gap: 14px; text-align: center; padding: 24px;
   }
-  .state-center.error { color: #f56565; }
-  .state-center button {
-    background: #3a7bd5; color: #fff; border: none; border-radius: 8px;
-    padding: 10px 24px; cursor: pointer; font-size: 0.9rem;
+  .error-icon { font-size: 3rem; }
+  .error-title { font-size: 1rem; color: #c8d6e5; line-height: 1.5; max-width: 280px; }
+  .error-sub { font-size: 0.85rem; color: #4a6080; max-width: 260px; line-height: 1.5; }
+  .refresh-btn {
+    background: #3a7bd5; color: #fff; border: none; border-radius: 12px;
+    padding: 14px 32px; cursor: pointer; font-size: 1rem; font-weight: 700;
+    font-family: inherit; margin-top: 8px;
   }
+  .refresh-btn:active { background: #2d6bc4; }
+
   .spinner {
-    width: 40px; height: 40px; border: 3px solid #1e2d3d;
+    width: 44px; height: 44px; border: 3px solid #1e2d3d;
     border-top-color: #3a7bd5; border-radius: 50%; animation: spin 0.8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .footer { text-align: center; padding: 24px; border-top: 1px solid #1a2a3a; color: #4a6080; font-size: 0.82rem; }
+  .footer { text-align: center; padding: 24px 16px; border-top: 1px solid #1a2a3a; color: #2a3a4a; font-size: 0.8rem; }
   .footer a { color: #3a7bd5; text-decoration: none; }
-  .footer a:hover { text-decoration: underline; }
 
-  @media (max-width: 560px) {
-    .nav-right { gap: 8px; }
-    .lang-toggle { padding: 7px 10px; font-size: 0.78rem; min-width: 90px; }
+  /* Desktop: wider cards */
+  @media (min-width: 700px) {
+    .main { padding: 24px 20px; }
+    .nav-top { padding: 16px 24px 10px; }
+    .search-row { padding: 0 24px 10px; }
+    .category-tabs { padding: 0 24px; }
   }
 </style>

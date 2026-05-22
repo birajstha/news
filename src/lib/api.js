@@ -8,17 +8,13 @@ async function fetchWithFallback(url) {
     },
     {
       build: (u) => 'https://api.allorigins.win/get?url=' + encodeURIComponent(u),
-      parse: async (res) => {
-        const data = await res.json();
-        return JSON.parse(data.contents);
-      },
+      parse: async (res) => { const d = await res.json(); return JSON.parse(d.contents); },
     },
     {
       build: (u) => 'https://thingproxy.freeboard.io/fetch/' + u,
       parse: async (res) => await res.json(),
     },
   ];
-
   let lastError;
   for (const proxy of proxies) {
     try {
@@ -29,17 +25,30 @@ async function fetchWithFallback(url) {
       lastError = err;
     }
   }
-  throw new Error('All CORS proxies failed: ' + lastError?.message);
+  throw new Error('PROXY_FAILED:' + lastError?.message);
 }
 
 async function fetchNews(path) {
   const url = 'https://newsapi.org/v2/' + path + '&apiKey=' + API_KEY;
   const parsed = await fetchWithFallback(url);
   if (parsed.status !== 'ok') throw new Error(parsed.message || 'Failed to fetch news');
-  return parsed.articles || [];
+  return (parsed.articles || []).filter(a =>
+    a.title && a.title !== '[Removed]' &&
+    !isCelebrity(a.title + ' ' + (a.description || ''))
+  );
 }
 
-// Translate text to Nepali using Google Translate (free, no key needed)
+// Filter out celebrity/gossip/clickbait
+function isCelebrity(text) {
+  const t = text.toLowerCase();
+  const noise = ['celebrity','kardashian','taylor swift','beyonce','justin bieber',
+    'selena gomez','outfit','dating rumor','breakup','pregnancy','baby shower',
+    'red carpet','met gala','bachelor','reality tv','tiktok dance','viral video',
+    'instagram','influencer','gossip','feud','drama'];
+  return noise.some(w => t.includes(w));
+}
+
+// Google Translate free endpoint
 export async function translateToNepali(text) {
   if (!text) return text;
   try {
@@ -48,25 +57,23 @@ export async function translateToNepali(text) {
     const data = await res.json();
     return data[0].map(d => d[0]).join('');
   } catch {
-    return text; // fallback to original
+    return text;
   }
 }
 
-// Keyword categories that use /v2/top-headlines with q=
-const KEYWORD_CATEGORIES = {
-  neurotech: 'neurotechnology',
-  brain: 'brain+neuroscience',
-  'mental-health': 'mental+health',
-  ai: 'artificial+intelligence',
+// Category definitions
+const CATEGORIES = {
+  'usa':         { q: 'USA politics economy', country: 'us' },
+  'nepal':       { q: 'Nepal', country: 'us', lang: 'en' },
+  'world':       { q: 'international world', country: 'us' },
+  'technology':  { q: 'technology', country: 'us' },
+  'medical':     { q: 'health medicine science', country: 'us' },
+  'trending':    { q: 'breaking trending', country: 'us' },
 };
 
-export async function fetchTopHeadlines(category = '') {
-  if (category && KEYWORD_CATEGORIES[category]) {
-    const q = KEYWORD_CATEGORIES[category];
-    return fetchNews(`top-headlines?q=${q}&country=us&pageSize=20`);
-  }
-  const cat = category && category !== 'all' ? `category=${category}&` : '';
-  return fetchNews(`top-headlines?${cat}country=us&pageSize=20`);
+export async function fetchTopHeadlines(category = 'usa') {
+  const cfg = CATEGORIES[category] || CATEGORIES['usa'];
+  return fetchNews(`top-headlines?q=${encodeURIComponent(cfg.q)}&country=${cfg.country}&pageSize=30`);
 }
 
 export async function searchNews(query) {
@@ -76,10 +83,10 @@ export async function searchNews(query) {
 export function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
   const m = Math.floor(diff / 60000);
-  if (m < 1) return 'just now';
-  if (m < 60) return `${m}m ago`;
+  if (m < 1) return 'भर्खरै';
+  if (m < 60) return `${m} मिनेट अघि`;
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return `${h} घण्टा अघि`;
   const d = Math.floor(h / 24);
-  return `${d}d ago`;
+  return `${d} दिन अघि`;
 }
