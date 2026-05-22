@@ -141,8 +141,19 @@
     return { ...article, title: t.title, description: t.description };
   }
 
-  // Reactive derived list — re-renders whenever nepali or translations change
-  $: displayedArticles = articles.map(a => display(a));
+  // Inline nepali+translations so Svelte tracks both as reactive deps
+  $: displayedArticles = articles.map(a => {
+    if (!nepali) return a;
+    const tr = translations[a.url];
+    if (!tr) return a;
+    return { ...a, title: tr.title, description: tr.description };
+  });
+
+  // Wrap article URL with Google Translate when in Nepali mode
+  function articleUrl(url) {
+    if (!nepali) return url;
+    return `https://translate.google.com/translate?sl=auto&tl=ne&u=${encodeURIComponent(url)}`;
+  }
 
   $: t = nepali ? UI.ne : UI.en;
 
@@ -241,6 +252,7 @@
             translating={nepali && !translations[article.url]}
             {nepali}
             readMoreLabel={t.readMore}
+            href={articleUrl(article.url)}
           />
         {/each}
       </div>

@@ -4,6 +4,7 @@
   export let translating = false;
   export let nepali = false;
   export let readMoreLabel = 'Read More';
+  export let href = article.url;
 
   const fallback = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&q=80';
   let imgSrc = article.urlToImage || fallback;
@@ -12,7 +13,7 @@
 
 <article class="card">
   {#if !imgError && imgSrc}
-    <a href={article.url} target="_blank" rel="noopener noreferrer" class="card-img-link">
+    <a href={href} target="_blank" rel="noopener noreferrer" class="card-img-link">
       <img
         src={imgSrc}
         alt=""
@@ -36,7 +37,7 @@
         <span class="shimmer wide"></span>
         <span class="shimmer medium"></span>
       {:else}
-        <a href={article.url} target="_blank" rel="noopener noreferrer">{article.title}</a>
+        <a href={href} target="_blank" rel="noopener noreferrer">{article.title}</a>
       {/if}
     </h2>
 
@@ -52,7 +53,7 @@
 
     <div class="card-footer">
       <span class="time">{timeAgo(article.publishedAt)}</span>
-      <a href={article.url} target="_blank" rel="noopener noreferrer" class="read-btn">
+      <a href={href} target="_blank" rel="noopener noreferrer" class="read-btn">
         {readMoreLabel} →
       </a>
     </div>
