@@ -20,7 +20,7 @@
       search: 'Search news...',
       loading: 'Loading news…',
       noArticles: 'No articles found.',
-      readMore: 'Read More',
+      readMore: '🔗 Full Article',
       install: '📲 Install App',
       langBtn: '🇺🇸 English',
       freeService: 'This app uses free news services which can be unreliable.',
@@ -33,7 +33,7 @@
       search: 'समाचार खोज्नुहोस्...',
       loading: 'समाचार लोड हुँदैछ…',
       noArticles: 'कुनै समाचार फेला परेन।',
-      readMore: 'थप पढ्नुहोस्',
+      readMore: '🔗 स्रोत हेर्नुहोस्',
       install: '📲 एप इन्स्टल गर्नुहोस्',
       langBtn: '🇳🇵 नेपाली',
       freeService: 'यो एप नि:शुल्क सेवाहरू प्रयोग गर्छ जुन कहिलेकाहीँ अविश्वसनीय हुन सक्छ।',
@@ -76,12 +76,12 @@
   async function translateArticle(article) {
     if (translations[article.url]) return;
     translatingCount += 1;
+    const key = article.url;
     const [title, description] = await Promise.all([
       translateToNepali(article.title),
-      article.description ? translateToNepali(article.description) : Promise.resolve(article.description),
+      article.description ? translateToNepali(article.description) : Promise.resolve(''),
     ]);
-    translations[article.url] = { title, description };
-    translations = { ...translations };
+    translations = { ...translations, [key]: { title, description } }; // new ref = Svelte re-renders
     translatingCount = Math.max(0, translatingCount - 1);
   }
 
