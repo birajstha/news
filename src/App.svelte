@@ -56,18 +56,24 @@
   let translatingCount = 0;
   let deferredInstall = null;
   let showInstall = false;
+  let isIOS = false;
+  let showIOSGuide = false;
 
-  // PWA install prompt
   if (typeof window !== 'undefined') {
+    isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+    const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+    // Show install button: on iOS always (unless already standalone), on others wait for prompt
+    if (isIOS && !isStandalone) showInstall = true;
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredInstall = e;
       showInstall = true;
     });
-    window.addEventListener('appinstalled', () => { showInstall = false; });
+    window.addEventListener('appinstalled', () => { showInstall = false; showIOSGuide = false; });
   }
 
   async function installApp() {
+    if (isIOS) { showIOSGuide = !showIOSGuide; return; }
     if (!deferredInstall) return;
     deferredInstall.prompt();
     const { outcome } = await deferredInstall.userChoice;
@@ -205,6 +211,18 @@
       {/each}
     </div>
   </nav>
+
+  {#if showIOSGuide}
+    <div class="ios-guide" on:click={() => showIOSGuide = false}>
+      <div class="ios-guide-box" on:click|stopPropagation>
+        <p class="ios-guide-title">{nepali ? 'होम स्क्रिनमा थप्नुहोस्' : 'Add to Home Screen'}</p>
+        <p class="ios-guide-step">1. Safari को तल <strong>Share</strong> बटन थिच्नुहोस् <span style="font-size:1.3rem">⎙</span></p>
+        <p class="ios-guide-step">2. <strong>"Add to Home Screen"</strong> छान्नुहोस् <span style="font-size:1.1rem">➕</span></p>
+        <p class="ios-guide-step">3. <strong>Add</strong> थिच्नुहोस् ✅</p>
+        <button class="ios-close" on:click={() => showIOSGuide = false}>✕ {nepali ? 'बन्द गर्नुहोस्' : 'Close'}</button>
+      </div>
+    </div>
+  {/if}
 
   <!-- Main -->
   <main class="main">
@@ -389,6 +407,25 @@
 
   .footer { text-align: center; padding: 24px 16px; border-top: 1px solid #1a2a3a; color: #2a3a4a; font-size: 0.8rem; }
   .footer a { color: #3a7bd5; text-decoration: none; }
+
+  /* iOS install guide */
+  .ios-guide {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    z-index: 999; display: flex; align-items: flex-end; justify-content: center;
+    padding: 16px;
+  }
+  .ios-guide-box {
+    background: #0d1a27; border: 1px solid #1e2d3d; border-radius: 20px;
+    padding: 24px 20px; width: 100%; max-width: 400px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .ios-guide-title { font-size: 1.1rem; font-weight: 800; color: #e8edf2; text-align: center; }
+  .ios-guide-step { font-size: 0.95rem; color: #c8d6e5; line-height: 1.5; }
+  .ios-close {
+    background: #1a2a3a; border: 1px solid #2a3a4a; border-radius: 12px;
+    color: #7a8fa8; padding: 12px; font-size: 0.9rem; cursor: pointer;
+    font-family: inherit; margin-top: 4px;
+  }
 
   /* Desktop: wider cards */
   @media (min-width: 700px) {
