@@ -17,7 +17,7 @@
   // UI strings in both languages
   const UI = {
     en: {
-      title: 'BirajNews',
+      title: 'Healthy Thoughts',
       tagline: 'USA & Nepal News for Nepalis Worldwide',
       search: 'Search news...',
       loading: 'Loading news…',
@@ -30,7 +30,7 @@
       ago: 'ago',
     },
     ne: {
-      title: 'BirajNews',
+      title: 'स्वस्थ विचार',
       tagline: 'विश्वभरका नेपालीहरूका लागि USA र नेपाल समाचार',
       search: 'समाचार खोज्नुहोस्...',
       loading: 'समाचार लोड हुँदैछ…',
@@ -169,7 +169,7 @@
       <div class="brand">
         <span class="brand-icon">📰</span>
         <div class="brand-text">
-          <span class="brand-name">Biraj<span class="accent">News</span></span>
+          <span class="brand-name">{nepali ? 'स्वस्थ' : 'Healthy'}<span class="accent">{nepali ? ' विचार' : ' Thoughts'}</span></span>
           <span class="brand-tag">{t.tagline}</span>
         </div>
       </div>

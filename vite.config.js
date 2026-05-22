@@ -11,8 +11,8 @@ export default defineConfig({
       base: '/news/',
       scope: '/news/',
       manifest: {
-        name: 'BirajNews — नेपाली समाचार',
-        short_name: 'BirajNews',
+        name: 'Healthy Thoughts — नेपाली समाचार',
+        short_name: 'HealthyThoughts',
         description: 'USA/Nepal news portal for Nepalis worldwide',
         theme_color: '#060d14',
         background_color: '#060d14',
