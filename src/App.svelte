@@ -3,7 +3,8 @@
   import NewsCard from './lib/NewsCard.svelte';
   import { streamTopHeadlines,
            getAllSources, getEnabledSources, setEnabledSources,
-           getLanguagePref, setLanguagePref } from './lib/api.js';
+           getLanguagePref, setLanguagePref,
+           getThemePref, setThemePref } from './lib/api.js';
 
   const categories = [
     { id: 'trending',   en: 'Trending 🔥',      ne: 'ट्रेन्डिङ 🔥' },
@@ -52,6 +53,7 @@
   // ─── STATE ───────────────────────────────────────────────────────────────────
   let activeCategory = 'trending';
   let nepali = typeof window !== 'undefined' ? getLanguagePref() : true;
+  let dark = typeof window !== 'undefined' ? getThemePref() : true;
   let searchQuery = '';
   let searchTimeout;
 
@@ -146,6 +148,17 @@
   function toggleNepali() {
     nepali = !nepali;
     setLanguagePref(nepali);
+  }
+
+  // ─── THEME ───────────────────────────────────────────────────────────────────
+  function toggleTheme() {
+    dark = !dark;
+    setThemePref(dark);
+    document.documentElement.classList.toggle('dark', dark);
+  }
+
+  $: if (typeof document !== 'undefined') {
+    document.documentElement.classList.toggle('dark', dark);
   }
 
   // ─── TRANSLATION ─────────────────────────────────────────────────────────────
@@ -321,6 +334,13 @@
         <button class="lang-toggle {nepali ? 'active' : ''}" on:click={toggleNepali}>
           {nepali ? '🇳🇵' : '🇺🇸'}
         </button>
+        <button class="theme-btn" on:click={toggleTheme} title={dark ? (nepali ? 'उज्यालो' : 'Light') : (nepali ? 'अँध्यारो' : 'Dark')}>
+          {#if dark}
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          {:else}
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          {/if}
+        </button>
       </div>
     </div>
 
@@ -439,8 +459,8 @@
   :global(*, *::before, *::after) { box-sizing: border-box; margin: 0; padding: 0; }
   :global(html) { font-size: 16px; }
   :global(body) {
-    background: #060d14;
-    color: #c8d6e5;
+    background: var(--bg);
+    color: var(--text);
     font-family: 'Noto Sans Devanagari', 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
@@ -451,9 +471,9 @@
   /* Navbar */
   .navbar {
     position: sticky; top: 0; z-index: 100;
-    background: rgba(6, 13, 20, 0.97);
+    background: var(--bg-nav);
     backdrop-filter: blur(16px);
-    border-bottom: 1px solid #1a2a3a;
+    border-bottom: 1px solid var(--border);
     padding-bottom: 8px;
     padding-top: env(safe-area-inset-top, 0px);
   }
@@ -465,52 +485,54 @@
   .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
   .brand-icon { font-size: 1.8rem; flex-shrink: 0; }
   .brand-text { display: flex; flex-direction: column; min-width: 0; }
-  .brand-name { font-size: 1.3rem; font-weight: 900; color: #e8edf2; letter-spacing: -0.5px; }
-  .accent { color: #3a7bd5; }
-  .brand-tag { font-size: 0.65rem; color: #4a6080; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .brand-name { font-size: 1.3rem; font-weight: 900; color: var(--text); letter-spacing: -0.5px; }
+  .accent { color: var(--accent); }
+  .brand-tag { font-size: 0.65rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   .nav-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
-  .install-btn {
-    background: linear-gradient(135deg, #3a7bd5, #00d2ff);
-    border: none; border-radius: 20px; color: #fff;
-    padding: 7px 12px; font-size: 0.75rem; font-weight: 700;
-    cursor: pointer; white-space: nowrap;
-  }
-
   .install-icon-btn {
-    background: #0f1923; border: 1px solid #1e2d3d; border-radius: 50%;
+    background: var(--tab-bg); border: 1px solid var(--tab-border); border-radius: 50%;
     width: 38px; height: 38px; font-size: 1.1rem;
     cursor: pointer; display: flex; align-items: center; justify-content: center;
-    transition: all 0.2s; flex-shrink: 0;
+    flex-shrink: 0;
   }
-  .install-icon-btn:hover { border-color: #3a7bd5; background: #1a2a3a; }
+  .install-icon-btn:hover { border-color: var(--accent); background: var(--bg-elevated); }
 
   .source-nav-btn {
-    background: #0f1923; border: 1px solid #1e2d3d; border-radius: 50%;
+    background: var(--tab-bg); border: 1px solid var(--tab-border); border-radius: 50%;
     width: 38px; height: 38px; font-size: 1.1rem;
     cursor: pointer; display: flex; align-items: center; justify-content: center;
-    transition: all 0.2s; flex-shrink: 0;
+    flex-shrink: 0;
   }
-  .source-nav-btn:hover { border-color: #3a7bd5; background: #1a2a3a; }
+  .source-nav-btn:hover { border-color: var(--accent); background: var(--bg-elevated); }
+
+  .theme-btn {
+    background: var(--tab-bg); border: 1px solid var(--tab-border); border-radius: 50%;
+    width: 38px; height: 38px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--tab-text); flex-shrink: 0;
+    transition: all 0.2s;
+  }
+  .theme-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--bg-elevated); }
 
   .lang-toggle {
-    background: #0f1923; border: 1px solid #1e2d3d; border-radius: 50%;
+    background: var(--tab-bg); border: 1px solid var(--tab-border); border-radius: 50%;
     width: 38px; height: 38px; font-size: 1.2rem;
     cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center;
   }
-  .lang-toggle:hover, .lang-toggle.active { border-color: #3a7bd5; background: #1a2a3a; }
+  .lang-toggle:hover, .lang-toggle.active { border-color: var(--accent); background: var(--bg-elevated); }
 
   .search-row { padding: 0 16px 8px; }
   .search-wrap { position: relative; }
   .search-input {
-    width: 100%; background: #0f1923; border: 1px solid #1e2d3d;
-    border-radius: 12px; color: #c8d6e5;
+    width: 100%; background: var(--bg-elevated); border: 1px solid var(--border);
+    border-radius: 12px; color: var(--text);
     padding: 12px 44px 12px 16px;
     font-size: 1rem; outline: none; transition: border-color 0.2s;
     -webkit-appearance: none;
   }
-  .search-input:focus { border-color: #3a7bd5; }
+  .search-input:focus { border-color: var(--accent); }
   .search-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); opacity: 0.4; pointer-events: none; font-size: 1.1rem; }
 
   /* Category tabs - scrollable horizontal */
@@ -520,13 +542,13 @@
   }
   .category-tabs::-webkit-scrollbar { display: none; }
   .tab {
-    background: transparent; border: 1px solid #1e2d3d; border-radius: 20px;
-    color: #7a8fa8; padding: 6px 12px; font-size: 0.82rem; font-weight: 600;
+    background: transparent; border: 1px solid var(--tab-border); border-radius: 20px;
+    color: var(--tab-text); padding: 6px 12px; font-size: 0.82rem; font-weight: 600;
     cursor: pointer; transition: all 0.2s; white-space: nowrap; flex-shrink: 0;
     font-family: inherit;
   }
-  .tab:hover { border-color: #3a7bd5; color: #c8d6e5; }
-  .tab.active { background: #3a7bd5; border-color: #3a7bd5; color: #fff; }
+  .tab:hover { border-color: var(--accent); color: var(--text); }
+  .tab.active { background: var(--tab-active-bg); border-color: var(--tab-active-bg); color: var(--tab-active-text); }
 
   /* Smaller tabs on narrow phones */
   @media (max-width: 480px) {
@@ -534,17 +556,17 @@
     .category-tabs { gap: 5px; padding: 0 12px; }
   }
 
-  
+  /* Main feed */
   .main { flex: 1; padding: 16px; max-width: 680px; margin: 0 auto; width: 100%; }
 
   .translate-bar {
     display: flex; align-items: center; gap: 10px;
-    background: #0f1923; border: 1px solid #1e2d3d; border-radius: 10px;
-    padding: 10px 16px; margin-bottom: 16px; font-size: 0.9rem; color: #7a8fa8;
+    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 16px; margin-bottom: 16px; font-size: 0.9rem; color: var(--text-muted);
   }
   .mini-spinner {
-    width: 16px; height: 16px; border: 2px solid #1e2d3d;
-    border-top-color: #3a7bd5; border-radius: 50%;
+    width: 16px; height: 16px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
     animation: spin 0.7s linear infinite; flex-shrink: 0;
   }
 
@@ -556,59 +578,59 @@
     min-height: 60vh; gap: 14px; text-align: center; padding: 24px;
   }
   .error-icon { font-size: 3rem; }
-  .error-title { font-size: 1rem; color: #c8d6e5; line-height: 1.5; max-width: 280px; }
-  .error-sub { font-size: 0.85rem; color: #4a6080; max-width: 260px; line-height: 1.5; }
+  .error-title { font-size: 1rem; color: var(--text); line-height: 1.5; max-width: 280px; }
+  .error-sub { font-size: 0.85rem; color: var(--text-muted); max-width: 260px; line-height: 1.5; }
   .refresh-btn {
-    background: #3a7bd5; color: #fff; border: none; border-radius: 12px;
+    background: var(--accent); color: #fff; border: none; border-radius: 12px;
     padding: 14px 32px; cursor: pointer; font-size: 1rem; font-weight: 700;
     font-family: inherit; margin-top: 8px;
   }
-  .refresh-btn:active { background: #2d6bc4; }
+  .refresh-btn:active { background: var(--accent-hover); }
 
   .spinner {
-    width: 44px; height: 44px; border: 3px solid #1e2d3d;
-    border-top-color: #3a7bd5; border-radius: 50%; animation: spin 0.8s linear infinite;
+    width: 44px; height: 44px; border: 3px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .footer { text-align: center; padding: 24px 16px; border-top: 1px solid #1a2a3a; color: #2a3a4a; font-size: 0.8rem; }
-  .footer a { color: #3a7bd5; text-decoration: none; }
+  .footer { text-align: center; padding: 24px 16px; border-top: 1px solid var(--footer-border); color: var(--text-muted); font-size: 0.8rem; }
+  .footer a { color: var(--accent); text-decoration: none; }
 
   /* iOS install guide */
   .ios-guide {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    position: fixed; inset: 0; background: var(--overlay-bg);
     z-index: 999; display: flex; align-items: flex-end; justify-content: center;
     padding: 16px;
   }
   .ios-guide-box {
-    background: #0d1a27; border: 1px solid #1e2d3d; border-radius: 20px;
+    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 20px;
     padding: 24px 20px; width: 100%; max-width: 400px;
     display: flex; flex-direction: column; gap: 14px;
   }
-  .ios-guide-title { font-size: 1.1rem; font-weight: 800; color: #e8edf2; text-align: center; }
-  .ios-guide-step { font-size: 0.95rem; color: #c8d6e5; line-height: 1.5; }
+  .ios-guide-title { font-size: 1.1rem; font-weight: 800; color: var(--text); text-align: center; }
+  .ios-guide-step { font-size: 0.95rem; color: var(--text-secondary); line-height: 1.5; }
   .ios-close {
-    background: #1a2a3a; border: 1px solid #2a3a4a; border-radius: 12px;
-    color: #7a8fa8; padding: 12px; font-size: 0.9rem; cursor: pointer;
+    background: var(--tab-bg); border: 1px solid var(--border); border-radius: 12px;
+    color: var(--text-muted); padding: 12px; font-size: 0.9rem; cursor: pointer;
     font-family: inherit; margin-top: 4px;
   }
 
   /* Source Selection Panel */
   .source-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    position: fixed; inset: 0; background: var(--overlay-bg);
     z-index: 999; display: flex; align-items: flex-end; justify-content: center;
     padding: 16px;
   }
   .source-panel {
-    background: #0d1a27; border: 1px solid #1e2d3d; border-radius: 20px;
+    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 20px;
     padding: 20px; width: 100%; max-width: 400px;
     display: flex; flex-direction: column; gap: 12px;
   }
   .source-panel-header h3 {
-    font-size: 1.1rem; font-weight: 800; color: #e8edf2; margin: 0;
+    font-size: 1.1rem; font-weight: 800; color: var(--text); margin: 0;
   }
   .source-panel-cat {
-    font-size: 0.75rem; color: #4a6080; margin-top: 2px; display: block;
+    font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; display: block;
   }
   .source-list {
     display: flex; flex-direction: column; gap: 8px;
@@ -619,26 +641,26 @@
     padding: 10px 12px; border-radius: 10px;
     cursor: pointer; transition: background 0.2s;
   }
-  .source-item:hover { background: #0f1923; }
+  .source-item:hover { background: var(--bg); }
   .source-item input[type="checkbox"] {
-    width: 20px; height: 20px; accent-color: #3a7bd5; flex-shrink: 0;
+    width: 20px; height: 20px; accent-color: var(--accent); flex-shrink: 0;
     cursor: pointer;
   }
-  .source-name { font-size: 0.95rem; color: #c8d6e5; font-weight: 600; }
+  .source-name { font-size: 0.95rem; color: var(--text); font-weight: 600; }
   .source-panel-actions {
     display: flex; gap: 10px; margin-top: 4px;
   }
   .source-cancel {
-    flex: 1; background: transparent; border: 1px solid #2a3a4a; border-radius: 12px;
-    color: #7a8fa8; padding: 12px; font-size: 0.9rem; font-weight: 700;
+    flex: 1; background: transparent; border: 1px solid var(--border); border-radius: 12px;
+    color: var(--text-muted); padding: 12px; font-size: 0.9rem; font-weight: 700;
     cursor: pointer; font-family: inherit;
   }
   .source-apply {
-    flex: 1; background: #3a7bd5; border: none; border-radius: 12px;
+    flex: 1; background: var(--accent); border: none; border-radius: 12px;
     color: #fff; padding: 12px; font-size: 0.9rem; font-weight: 700;
     cursor: pointer; font-family: inherit;
   }
-  .source-apply:active { background: #2d6bc4; }
+  .source-apply:active { background: var(--accent-hover); }
 
   /* Desktop: wider cards */
   @media (min-width: 700px) {

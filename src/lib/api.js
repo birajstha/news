@@ -271,6 +271,16 @@ export function setLanguagePref(nepali) {
   savePrefs(prefs);
 }
 
+export function getThemePref() {
+  return loadPrefs().dark !== false; // default: dark
+}
+
+export function setThemePref(dark) {
+  const prefs = loadPrefs();
+  prefs.dark = dark;
+  savePrefs(prefs);
+}
+
 export function getAllSources(category) {
   return FEEDS[category] || [];
 }

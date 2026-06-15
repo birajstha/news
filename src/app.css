@@ -1,16 +1,106 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;600;700;900&family=Inter:wght@400;600;700;800;900&display=swap');
+@import "tailwindcss";
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+@custom-variant dark (&:where(.dark, .dark *));
 
-html {
-  font-size: 16px;
-  -webkit-text-size-adjust: 100%;
+@theme {
+  --color-bg: #f4f6f9;
+  --color-bg-card: #ffffff;
+  --color-bg-nav: rgba(244, 246, 249, 0.97);
+  --color-bg-elevated: #ffffff;
+  --color-text: #1a2332;
+  --color-text-secondary: #4a5568;
+  --color-text-muted: #718096;
+  --color-border: #e2e8f0;
+  --color-accent: #3a7bd5;
+  --color-accent-hover: #2d6bc4;
+  --color-accent-bg: rgba(58, 123, 213, 0.08);
+  --color-tab-bg: #ffffff;
+  --color-tab-border: #e2e8f0;
+  --color-shimmer-from: #e2e8f0;
+  --color-shimmer-to: #edf2f7;
 }
 
-body {
-  background: #060d14;
-  color: #c8d6e5;
-  font-family: 'Noto Sans Devanagari', 'Inter', system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  overscroll-behavior-y: contain;
+@utility container-app {
+  max-width: 680px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ─── Dark mode overrides ─────────────────────────────────────────────────── */
+@layer base {
+  .dark {
+    --color-bg: #060d14;
+    --color-bg-card: #0d1a27;
+    --color-bg-nav: rgba(6, 13, 20, 0.97);
+    --color-bg-elevated: #0d1a27;
+    --color-text: #c8d6e5;
+    --color-text-secondary: #7a8fa8;
+    --color-text-muted: #4a6080;
+    --color-border: #1a2a3a;
+    --color-accent: #3a7bd5;
+    --color-accent-hover: #2d6bc4;
+    --color-accent-bg: rgba(58, 123, 213, 0.1);
+    --color-tab-bg: transparent;
+    --color-tab-border: #1e2d3d;
+    --color-shimmer-from: #1a2a3a;
+    --color-shimmer-to: #243447;
+    --color-footer-border: #1a2a3a;
+    --color-overlay-bg: rgba(0, 0, 0, 0.6);
+
+    /* Sync old var names for backward compat */
+    --bg: var(--color-bg);
+    --bg-card: var(--color-bg-card);
+    --bg-nav: var(--color-bg-nav);
+    --bg-elevated: var(--color-bg-elevated);
+    --text: var(--color-text);
+    --text-secondary: var(--color-text-secondary);
+    --text-muted: var(--color-text-muted);
+    --border: var(--color-border);
+    --accent: var(--color-accent);
+    --accent-hover: var(--color-accent-hover);
+    --accent-bg: var(--color-accent-bg);
+    --tab-bg: var(--color-tab-bg);
+    --tab-border: var(--color-tab-border);
+    --tab-text: #7a8fa8;
+    --tab-active-bg: var(--color-accent);
+    --tab-active-text: #ffffff;
+    --shimmer-from: var(--color-shimmer-from);
+    --shimmer-to: var(--color-shimmer-to);
+    --footer-border: var(--color-footer-border);
+    --overlay-bg: var(--color-overlay-bg);
+  }
+
+  :root {
+    --bg: var(--color-bg);
+    --bg-card: var(--color-bg-card);
+    --bg-nav: var(--color-bg-nav);
+    --bg-elevated: var(--color-bg-elevated);
+    --text: var(--color-text);
+    --text-secondary: var(--color-text-secondary);
+    --text-muted: var(--color-text-muted);
+    --border: var(--color-border);
+    --accent: var(--color-accent);
+    --accent-hover: var(--color-accent-hover);
+    --accent-bg: var(--color-accent-bg);
+    --tab-bg: var(--color-tab-bg);
+    --tab-border: var(--color-tab-border);
+    --tab-text: #4a5568;
+    --tab-active-bg: var(--color-accent);
+    --tab-active-text: #ffffff;
+    --shimmer-from: var(--color-shimmer-from);
+    --shimmer-to: var(--color-shimmer-to);
+    --footer-border: #e2e8f0;
+    --overlay-bg: rgba(0, 0, 0, 0.5);
+  }
+
+  html { font-size: 16px; -webkit-text-size-adjust: 100%; }
+  body {
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: 'Noto Sans Devanagari', 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: contain;
+    transition: background-color 0.3s, color 0.3s;
+  }
+  a { color: inherit; }
 }
