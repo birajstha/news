@@ -320,7 +320,7 @@
   <nav class="navbar">
     <div class="nav-top">
       <div class="brand">
-        <span class="brand-icon">📰</span>
+        <!-- no icon -->
         <div class="brand-text">
           <span class="brand-name">{nepali ? 'स्वस्थ' : 'Healthy'}<span class="accent">{nepali ? ' विचार' : ' Thoughts'}</span></span>
           <span class="brand-tag">{t.tagline}</span>
@@ -483,7 +483,7 @@
     gap: 12px;
   }
   .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
-  .brand-icon { font-size: 1.8rem; flex-shrink: 0; }
+
   .brand-text { display: flex; flex-direction: column; min-width: 0; }
   .brand-name { font-size: 1.3rem; font-weight: 900; color: var(--text); letter-spacing: -0.5px; }
   .accent { color: var(--accent); }
