@@ -1,7 +1,9 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import NewsCard from './lib/NewsCard.svelte';
-  import { fetchTopHeadlines, searchNews, translateToNepali, streamTopHeadlines } from './lib/api.js';
+  import { streamTopHeadlines,
+           getAllSources, getEnabledSources, setEnabledSources,
+           getLanguagePref, setLanguagePref } from './lib/api.js';
 
   const categories = [
     { id: 'trending',   en: 'Trending 🔥',      ne: 'ट्रेन्डिङ 🔥' },
@@ -10,11 +12,14 @@
     { id: 'world',      en: 'World 🌐',         ne: 'विश्व 🌐' },
     { id: 'finance',    en: 'Finance 💰',       ne: 'वित्त 💰' },
     { id: 'technology', en: 'Technology 💻',    ne: 'प्रविधि 💻' },
+    { id: 'ai',         en: 'AI 🤖',            ne: 'एआई 🤖' },
+    { id: 'science',    en: 'Science 🔬',       ne: 'विज्ञान 🔬' },
+    { id: 'sports',     en: 'Sports ⚽',        ne: 'खेलकुद ⚽' },
     { id: 'medical',    en: 'Health 🏥',        ne: 'स्वास्थ्य 🏥' },
     { id: 'gossip',     en: 'Gossip 🌟',        ne: 'गफसफ 🌟' },
   ];
 
-  // UI strings in both languages
+  // ─── LOCALISATION ────────────────────────────────────────────────────────────
   const UI = {
     en: {
       title: 'Healthy Thoughts',
@@ -44,25 +49,184 @@
     }
   };
 
+  // ─── STATE ───────────────────────────────────────────────────────────────────
   let activeCategory = 'trending';
-  let articles = [];
-  let loading = false;
-  let error = '';
-  let isProxyError = false;
+  let nepali = typeof window !== 'undefined' ? getLanguagePref() : true;
   let searchQuery = '';
   let searchTimeout;
-  let nepali = true; // DEFAULT: Nepali
-  let translations = {};
-  let translatingCount = 0;
+
+  // Article cache: { categoryId: [articles] }
+  let articleCache = {};
+  // Track which categories have been fetched (to avoid re-fetch)
+  let fetchedCategories = new Set();
+  // Track if we're doing initial bulk load (show spinner for categories not yet loaded)
+  let bulkLoading = true;
+
+  // PWA install
   let deferredInstall = null;
   let showInstall = false;
   let isIOS = false;
   let showIOSGuide = false;
 
+  // Source panel
+  let showSourcePanel = false;
+
+  // ─── DERIVED: articles to display for current category ───────────────────────
+  // No API call — just filter from cache
+  let displayedArticles = [];
+
+  function updateDisplayed() {
+    const all = articleCache[activeCategory];
+    if (!all || !all.length) {
+      displayedArticles = [];
+      return;
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      displayedArticles = all.filter(a =>
+        (a.title + ' ' + (a.description || '')).toLowerCase().includes(q)
+      );
+    } else {
+      displayedArticles = all;
+    }
+  }
+
+  // Reactively update when category or cache changes
+  // (Svelte 5: reassigning activeCategory triggers this)
+  $: if (activeCategory && articleCache) {
+    updateDisplayed();
+  }
+
+  // ─── FETCHING ────────────────────────────────────────────────────────────────
+  async function fetchCategory(catId) {
+    if (fetchedCategories.has(catId)) return;
+    fetchedCategories.add(catId);
+
+    await streamTopHeadlines(catId, (batch) => {
+      articleCache = { ...articleCache, [catId]: batch };
+    });
+  }
+
+  // Load all categories in parallel (background)
+  async function fetchAllCategories() {
+    const ids = categories.map(c => c.id);
+    await Promise.allSettled(ids.map(fetchCategory));
+    bulkLoading = false;
+  }
+
+  // Refresh a single category in background (updates cache silently)
+  async function refreshCategory(catId) {
+    // Temporarily remove from fetched so streamTopHeadlines won't use stale cache
+    fetchedCategories.delete(catId);
+    await fetchCategory(catId);
+  }
+
+  // ─── TAB SWITCHING (instant — no network call) ────────────────────────────────
+  function setCategory(id) {
+    if (id === activeCategory) return;
+    activeCategory = id;
+    searchQuery = '';
+    // Close source panel if open
+    showSourcePanel = false;
+    // If this category hasn't been fetched yet, fetch it now
+    if (!articleCache[id]) {
+      fetchCategory(id);
+    }
+  }
+
+  // ─── SEARCH ──────────────────────────────────────────────────────────────────
+  function handleSearch() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      updateDisplayed();
+    }, 300);
+  }
+
+  // ─── LANGUAGE ────────────────────────────────────────────────────────────────
+  function toggleNepali() {
+    nepali = !nepali;
+    setLanguagePref(nepali);
+  }
+
+  // ─── TRANSLATION ─────────────────────────────────────────────────────────────
+  import { translateToNepali } from './lib/api.js';
+  let translations = {};
+  let translatingCount = 0;
+
+  async function translateArticle(article) {
+    if (translations[article.url]) return;
+    translatingCount += 1;
+    const key = article.url;
+    const [title, description] = await Promise.all([
+      translateToNepali(article.title),
+      article.description ? translateToNepali(article.description) : Promise.resolve(''),
+    ]);
+    translations = { ...translations, [key]: { title, description } };
+    translatingCount = Math.max(0, translatingCount - 1);
+  }
+
+  function translateArticles(list) {
+    for (const a of list) {
+      if (!translations[a.url]) translateArticle(a);
+    }
+  }
+
+  // Translated display
+  $: translatedView = displayedArticles.map(a => {
+    if (!nepali) return a;
+    const tr = translations[a.url];
+    if (!tr) return a;
+    return { ...a, title: tr.title, description: tr.description };
+  });
+
+  $: if (nepali && displayedArticles.length) {
+    translateArticles(displayedArticles.filter(a => !translations[a.url]));
+  }
+
+  // ─── SOURCE PANEL ────────────────────────────────────────────────────────────
+  let sourcePanelActive = null; // { category: string, sources: [{name, url}], enabled: string[] }
+
+  function openSourcePanel(catId) {
+    sourcePanelActive = {
+      category: catId,
+      sources: getAllSources(catId),
+      enabled: [...getEnabledSources(catId)]
+    };
+    showSourcePanel = true;
+  }
+
+  function toggleSource(sourceName) {
+    if (!sourcePanelActive) return;
+    const idx = sourcePanelActive.enabled.indexOf(sourceName);
+    if (idx === -1) {
+      sourcePanelActive = {
+        ...sourcePanelActive,
+        enabled: [...sourcePanelActive.enabled, sourceName]
+      };
+    } else if (sourcePanelActive.enabled.length > 1) {
+      sourcePanelActive = {
+        ...sourcePanelActive,
+        enabled: sourcePanelActive.enabled.filter(s => s !== sourceName)
+      };
+    }
+  }
+
+  function applySources() {
+    if (!sourcePanelActive) return;
+    const cat = sourcePanelActive.category;
+    setEnabledSources(cat, sourcePanelActive.enabled);
+    showSourcePanel = false;
+    sourcePanelActive = null;
+    fetchedCategories.delete(cat);
+    delete articleCache[cat];
+    articleCache = { ...articleCache };
+    fetchCategory(cat);
+  }
+
+  // ─── PWA ─────────────────────────────────────────────────────────────────────
   if (typeof window !== 'undefined') {
     isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
     const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
-    // Show install button: on iOS always (unless already standalone), on others wait for prompt
     if (isIOS && !isStandalone) showInstall = true;
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
@@ -81,119 +245,45 @@
     deferredInstall = null;
   }
 
-  async function translateArticle(article) {
-    if (translations[article.url]) return;
-    translatingCount += 1;
-    const key = article.url;
-    const [title, description] = await Promise.all([
-      translateToNepali(article.title),
-      article.description ? translateToNepali(article.description) : Promise.resolve(''),
-    ]);
-    translations = { ...translations, [key]: { title, description } }; // new ref = Svelte re-renders
-    translatingCount = Math.max(0, translatingCount - 1);
-  }
-
-  function startTranslating(list) {
-    for (const a of list) translateArticle(a);
-  }
-
-  async function loadNews(category) {
-    loading = true;
-    error = '';
-    isProxyError = false;
-    translations = {};
-    translatingCount = 0;
-    articles = [];
-    try {
-      await streamTopHeadlines(category, (batch) => {
-        articles = batch;
-        loading = false; // show results as soon as first feed arrives
-        if (nepali) startTranslating(batch.filter(a => !translations[a.url]));
-      });
-    } catch (e) {
-      error = e.message;
-      isProxyError = e.message.startsWith('PROXY_FAILED') || e.message.includes('CORS') || e.message.includes('proxy');
-      articles = [];
-    }
-    loading = false;
-  }
-
-  function setCategory(id) {
-    activeCategory = id;
-    searchQuery = '';
-    loadNews(id);
-  }
-
-  function handleSearch() {
-    clearTimeout(searchTimeout);
-    if (!searchQuery.trim()) { loadNews(activeCategory); return; }
-    searchTimeout = setTimeout(async () => {
-      loading = true; error = ''; isProxyError = false; translations = {};
-      try {
-        articles = await searchNews(searchQuery.trim());
-        if (nepali) startTranslating(articles);
-      } catch (e) {
-        error = e.message;
-        isProxyError = e.message.startsWith('PROXY_FAILED');
-        articles = [];
-      }
-      loading = false;
-    }, 500);
-  }
-
-  function toggleNepali() {
-    nepali = !nepali;
-    if (nepali) startTranslating(articles);
-  }
-
-  function display(article) {
-    if (!nepali) return article;
-    const t = translations[article.url];
-    if (!t) return article;
-    return { ...article, title: t.title, description: t.description };
-  }
-
-  // Inline nepali+translations so Svelte tracks both as reactive deps
-  $: displayedArticles = articles.map(a => {
-    if (!nepali) return a;
-    const tr = translations[a.url];
-    if (!tr) return a;
-    return { ...a, title: tr.title, description: tr.description };
-  });
-
-  // Wrap article URL with Google Translate when in Nepali mode
-  function articleUrl(url) {
-    if (!nepali) return url;
-    return `https://translate.google.com/translate?sl=auto&tl=ne&u=${encodeURIComponent(url)}`;
-  }
-
-  $: t = nepali ? UI.ne : UI.en;
-
-  // ─── Auto-refresh logic ────────────────────────────────────────────────────
-  // Peak hours (6-9am, 12-1pm, 6-9pm ET or Nepal time) → 15 min, else 30 min
+  // ─── AUTO-REFRESH ────────────────────────────────────────────────────────────
   function isPeakHour() {
-    const h = new Date().getHours(); // local device time
+    const h = new Date().getHours();
     return (h >= 6 && h < 9) || (h >= 12 && h < 13) || (h >= 18 && h < 21);
   }
 
   let refreshInterval;
+
   function scheduleRefresh() {
     clearInterval(refreshInterval);
     const ms = isPeakHour() ? 15 * 60 * 1000 : 30 * 60 * 1000;
-    refreshInterval = setInterval(() => loadNews(activeCategory), ms);
+    refreshInterval = setInterval(() => {
+      // Refresh all categories in background silently
+      const ids = categories.map(c => c.id);
+      for (const id of ids) {
+        refreshCategory(id);
+      }
+      // Trigger reactive update
+      articleCache = { ...articleCache };
+    }, ms);
   }
 
   function handleVisibility() {
     if (document.visibilityState === 'visible') {
-      loadNews(activeCategory); // fresh fetch when user returns to tab
+      // Refresh the active category when user returns
+      refreshCategory(activeCategory).then(() => {
+        articleCache = { ...articleCache };
+      });
       scheduleRefresh();
     } else {
       clearInterval(refreshInterval);
     }
   }
 
+  // ─── LIFECYCLE ───────────────────────────────────────────────────────────────
   onMount(() => {
-    loadNews('trending');
+    // Load active category immediately, then all others in background
+    fetchCategory('trending');
+    fetchAllCategories();
     scheduleRefresh();
     document.addEventListener('visibilitychange', handleVisibility);
   });
@@ -202,6 +292,14 @@
     clearInterval(refreshInterval);
     document.removeEventListener('visibilitychange', handleVisibility);
   });
+
+  // ─── HELPERS ─────────────────────────────────────────────────────────────────
+  function articleUrl(url) {
+    if (!nepali) return url;
+    return `https://translate.google.com/translate?sl=auto&tl=ne&u=${encodeURIComponent(url)}`;
+  }
+
+  $: t = nepali ? UI.ne : UI.en;
 </script>
 
 <div class="app">
@@ -219,6 +317,7 @@
         {#if showInstall}
           <button class="install-icon-btn" on:click={installApp} title={t.install}>📲</button>
         {/if}
+        <button class="source-nav-btn" on:click={() => openSourcePanel(activeCategory)} title={nepali ? 'स्रोतहरू' : 'Sources'}>⚙️</button>
         <button class="lang-toggle {nepali ? 'active' : ''}" on:click={toggleNepali}>
           {nepali ? '🇳🇵' : '🇺🇸'}
         </button>
@@ -260,36 +359,52 @@
     </div>
   {/if}
 
+  <!-- Source Selection Panel -->
+  {#if showSourcePanel && sourcePanelActive}
+    <div class="source-overlay" on:click={() => { showSourcePanel = false; sourcePanelActive = null; }}>
+      <div class="source-panel" on:click|stopPropagation>
+        <div class="source-panel-header">
+          <h3>{nepali ? 'स्रोतहरू' : 'News Sources'}</h3>
+          <span class="source-panel-cat">{nepali ? categories.find(c => c.id === sourcePanelActive.category)?.ne || '' : categories.find(c => c.id === sourcePanelActive.category)?.en || ''}</span>
+        </div>
+        <div class="source-list">
+          {#each sourcePanelActive.sources as src}
+            <label class="source-item">
+              <input
+                type="checkbox"
+                checked={sourcePanelActive.enabled.includes(src.name)}
+                on:change={() => toggleSource(src.name)}
+              />
+              <span class="source-name">{src.name}</span>
+            </label>
+          {/each}
+        </div>
+        <div class="source-panel-actions">
+          <button class="source-cancel" on:click={() => { showSourcePanel = false; sourcePanelActive = null; }}>
+            {nepali ? 'रद्द गर्नुहोस्' : 'Cancel'}
+          </button>
+          <button class="source-apply" on:click={applySources}>
+            {nepali ? 'लागू गर्नुहोस्' : 'Apply'}
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
   <!-- Main -->
   <main class="main">
-    {#if loading}
+    {#if !articleCache[activeCategory]}
       <div class="state-center">
         <div class="spinner"></div>
         <p>{t.loading}</p>
       </div>
 
-    {:else if error}
-      <div class="state-center error">
-        {#if isProxyError}
-          <div class="error-icon">📡</div>
-          <p class="error-title">{t.freeService}</p>
-          <p class="error-sub">{t.refresh}</p>
-        {:else}
-          <div class="error-icon">⚠️</div>
-          <p class="error-title">{error}</p>
-          <p class="error-sub">{t.freeService}</p>
-        {/if}
-        <button class="refresh-btn" on:click={() => loadNews(activeCategory)}>
-          🔄 {nepali ? 'रिफ्रेस' : 'Refresh'}
-        </button>
-      </div>
-
-    {:else if articles.length === 0}
+    {:else if translatedView.length === 0}
       <div class="state-center">
         <div class="error-icon">🔍</div>
         <p class="error-title">{t.noArticles}</p>
         <p class="error-sub">{t.freeService}</p>
-        <button class="refresh-btn" on:click={() => loadNews(activeCategory)}>
+        <button class="refresh-btn" on:click={() => { fetchedCategories.delete(activeCategory); fetchCategory(activeCategory); }}>
           🔄 {nepali ? 'रिफ्रेस' : 'Refresh'}
         </button>
       </div>
@@ -302,7 +417,7 @@
         </div>
       {/if}
       <div class="feed">
-        {#each displayedArticles as article (article.url)}
+        {#each translatedView as article (article.url)}
           <NewsCard
             {article}
             translating={nepali && !translations[article.url]}
@@ -371,6 +486,14 @@
   }
   .install-icon-btn:hover { border-color: #3a7bd5; background: #1a2a3a; }
 
+  .source-nav-btn {
+    background: #0f1923; border: 1px solid #1e2d3d; border-radius: 50%;
+    width: 38px; height: 38px; font-size: 1.1rem;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s; flex-shrink: 0;
+  }
+  .source-nav-btn:hover { border-color: #3a7bd5; background: #1a2a3a; }
+
   .lang-toggle {
     background: #0f1923; border: 1px solid #1e2d3d; border-radius: 50%;
     width: 38px; height: 38px; font-size: 1.2rem;
@@ -398,14 +521,20 @@
   .category-tabs::-webkit-scrollbar { display: none; }
   .tab {
     background: transparent; border: 1px solid #1e2d3d; border-radius: 20px;
-    color: #7a8fa8; padding: 8px 16px; font-size: 0.9rem; font-weight: 600;
+    color: #7a8fa8; padding: 6px 12px; font-size: 0.82rem; font-weight: 600;
     cursor: pointer; transition: all 0.2s; white-space: nowrap; flex-shrink: 0;
     font-family: inherit;
   }
   .tab:hover { border-color: #3a7bd5; color: #c8d6e5; }
   .tab.active { background: #3a7bd5; border-color: #3a7bd5; color: #fff; }
 
-  /* Main feed */
+  /* Smaller tabs on narrow phones */
+  @media (max-width: 480px) {
+    .tab { padding: 5px 10px; font-size: 0.75rem; }
+    .category-tabs { gap: 5px; padding: 0 12px; }
+  }
+
+  
   .main { flex: 1; padding: 16px; max-width: 680px; margin: 0 auto; width: 100%; }
 
   .translate-bar {
@@ -463,6 +592,53 @@
     color: #7a8fa8; padding: 12px; font-size: 0.9rem; cursor: pointer;
     font-family: inherit; margin-top: 4px;
   }
+
+  /* Source Selection Panel */
+  .source-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    z-index: 999; display: flex; align-items: flex-end; justify-content: center;
+    padding: 16px;
+  }
+  .source-panel {
+    background: #0d1a27; border: 1px solid #1e2d3d; border-radius: 20px;
+    padding: 20px; width: 100%; max-width: 400px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .source-panel-header h3 {
+    font-size: 1.1rem; font-weight: 800; color: #e8edf2; margin: 0;
+  }
+  .source-panel-cat {
+    font-size: 0.75rem; color: #4a6080; margin-top: 2px; display: block;
+  }
+  .source-list {
+    display: flex; flex-direction: column; gap: 8px;
+    max-height: 50vh; overflow-y: auto;
+  }
+  .source-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px; border-radius: 10px;
+    cursor: pointer; transition: background 0.2s;
+  }
+  .source-item:hover { background: #0f1923; }
+  .source-item input[type="checkbox"] {
+    width: 20px; height: 20px; accent-color: #3a7bd5; flex-shrink: 0;
+    cursor: pointer;
+  }
+  .source-name { font-size: 0.95rem; color: #c8d6e5; font-weight: 600; }
+  .source-panel-actions {
+    display: flex; gap: 10px; margin-top: 4px;
+  }
+  .source-cancel {
+    flex: 1; background: transparent; border: 1px solid #2a3a4a; border-radius: 12px;
+    color: #7a8fa8; padding: 12px; font-size: 0.9rem; font-weight: 700;
+    cursor: pointer; font-family: inherit;
+  }
+  .source-apply {
+    flex: 1; background: #3a7bd5; border: none; border-radius: 12px;
+    color: #fff; padding: 12px; font-size: 0.9rem; font-weight: 700;
+    cursor: pointer; font-family: inherit;
+  }
+  .source-apply:active { background: #2d6bc4; }
 
   /* Desktop: wider cards */
   @media (min-width: 700px) {

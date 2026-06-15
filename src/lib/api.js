@@ -139,64 +139,141 @@ function clean(articles) {
     }, []); // deduplicate
 }
 
-// ─── RSS FEED REGISTRY ────────────────────────────────────────────────────────
+// ─── RSS FEED REGISTRY (named sources for per-source toggling) ────────────────
 const FEEDS = {
   usa: [
-    'https://feeds.npr.org/1001/rss.xml',
-    'http://feeds.washingtonpost.com/rss/politics',
-    'https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml',
-    'https://feeds.politico.com/politico/rss/politicopicks',
-    'https://feeds.a.dj.com/rss/RSSWorldNews.xml',
+    { name: 'NPR', url: 'https://feeds.npr.org/1001/rss.xml' },
+    { name: 'Washington Post', url: 'http://feeds.washingtonpost.com/rss/politics' },
+    { name: 'NYT', url: 'https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml' },
+    { name: 'Politico', url: 'https://feeds.politico.com/politico/rss/politicopicks' },
+    { name: 'WSJ', url: 'https://feeds.a.dj.com/rss/RSSWorldNews.xml' },
   ],
   nepal: [
-    'https://thehimalayantimes.com/feed/',
-    'https://kathmandupost.com/rss',
-    'https://myrepublica.nagariknetwork.com/feed/',
-    'https://english.onlinekhabar.com/feed',
-    'https://risingnepaldaily.com/feed',
+    { name: 'Himalayan Times', url: 'https://thehimalayantimes.com/feed/' },
+    { name: 'Kathmandu Post', url: 'https://kathmandupost.com/rss' },
+    { name: 'My Republica', url: 'https://myrepublica.nagariknetwork.com/feed/' },
+    { name: 'Online Khabar', url: 'https://english.onlinekhabar.com/feed' },
+    { name: 'Rising Nepal', url: 'https://risingnepaldaily.com/feed' },
   ],
   world: [
-    'https://feeds.bbci.co.uk/news/world/rss.xml',
-    'https://www.aljazeera.com/xml/rss/all.xml',
-    'https://feeds.reuters.com/reuters/topNews',
-    'https://rss.dw.com/rdf/rss-en-all',
-    'https://feeds.skynews.com/feeds/rss/world.xml',
+    { name: 'BBC', url: 'https://feeds.bbci.co.uk/news/world/rss.xml' },
+    { name: 'Al Jazeera', url: 'https://www.aljazeera.com/xml/rss/all.xml' },
+    { name: 'Reuters', url: 'https://feeds.reuters.com/reuters/topNews' },
+    { name: 'DW', url: 'https://rss.dw.com/rdf/rss-en-all' },
+    { name: 'Sky News', url: 'https://feeds.skynews.com/feeds/rss/world.xml' },
   ],
   technology: [
-    'https://techcrunch.com/feed/',
-    'https://www.theverge.com/rss/index.xml',
-    'https://feeds.arstechnica.com/arstechnica/index',
-    'https://www.wired.com/feed/rss',
-    'https://feeds.feedburner.com/venturebeat/SZYF',
+    { name: 'TechCrunch', url: 'https://techcrunch.com/feed/' },
+    { name: 'The Verge', url: 'https://www.theverge.com/rss/index.xml' },
+    { name: 'Ars Technica', url: 'https://feeds.arstechnica.com/arstechnica/index' },
+    { name: 'Wired', url: 'https://www.wired.com/feed/rss' },
+    { name: 'VentureBeat', url: 'https://feeds.feedburner.com/venturebeat/SZYF' },
   ],
   medical: [
-    'https://feeds.webmd.com/rss/rss.aspx?RSSSource=RSS_PUBLIC',
-    'https://www.medicalnewstoday.com/rss',
-    'https://feeds.npr.org/1128/rss.xml',
-    'https://feeds.bbci.co.uk/news/health/rss.xml',
-    'https://rss.nytimes.com/services/xml/rss/nyt/Health.xml',
+    { name: 'WebMD', url: 'https://feeds.webmd.com/rss/rss.aspx?RSSSource=RSS_PUBLIC' },
+    { name: 'Medical News Today', url: 'https://www.medicalnewstoday.com/rss' },
+    { name: 'NPR Health', url: 'https://feeds.npr.org/1128/rss.xml' },
+    { name: 'BBC Health', url: 'https://feeds.bbci.co.uk/news/health/rss.xml' },
+    { name: 'NYT Health', url: 'https://rss.nytimes.com/services/xml/rss/nyt/Health.xml' },
   ],
   trending: [
-    'https://feeds.bbci.co.uk/news/rss.xml',
-    'https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml',
-    'https://feeds.npr.org/1001/rss.xml',
-    'https://feeds.reuters.com/reuters/topNews',
+    { name: 'BBC', url: 'https://feeds.bbci.co.uk/news/rss.xml' },
+    { name: 'NYT', url: 'https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml' },
+    { name: 'NPR', url: 'https://feeds.npr.org/1001/rss.xml' },
+    { name: 'Reuters', url: 'https://feeds.reuters.com/reuters/topNews' },
   ],
   finance: [
-    'https://feeds.bloomberg.com/markets/news.rss',
-    'https://www.cnbc.com/id/10000664/device/rss/rss.html',
-    'https://feeds.marketwatch.com/marketwatch/topstories/',
-    'https://www.investing.com/rss/news_301.rss',
-    'https://feeds.finance.yahoo.com/rss/2.0/headline?s=^GSPC,^DJI,^IXIC&region=US&lang=en-US',
+    { name: 'Bloomberg', url: 'https://feeds.bloomberg.com/markets/news.rss' },
+    { name: 'CNBC', url: 'https://www.cnbc.com/id/10000664/device/rss/rss.html' },
+    { name: 'MarketWatch', url: 'https://feeds.marketwatch.com/marketwatch/topstories/' },
+    { name: 'Investing.com', url: 'https://www.investing.com/rss/news_301.rss' },
+    { name: 'Yahoo Finance', url: 'https://feeds.finance.yahoo.com/rss/2.0/headline?s=^GSPC,^DJI,^IXIC&region=US&lang=en-US' },
   ],
   gossip: [
-    'https://www.tmz.com/rss.xml',
-    'https://people.com/feed/',
-    'https://www.eonline.com/syndication/feeds/rssfeeds/topstories.xml',
-    'https://pagesix.com/feed/',
-    'https://www.usmagazine.com/feed/',
+    { name: 'TMZ', url: 'https://www.tmz.com/rss.xml' },
+    { name: 'People', url: 'https://people.com/feed/' },
+    { name: 'E! Online', url: 'https://www.eonline.com/syndication/feeds/rssfeeds/topstories.xml' },
+    { name: 'Page Six', url: 'https://pagesix.com/feed/' },
+    { name: 'US Weekly', url: 'https://www.usmagazine.com/feed/' },
+  ],
+  science: [
+    { name: 'Nature', url: 'https://feeds.nature.com/nature/rss/current' },
+    { name: 'ScienceDaily', url: 'https://www.sciencedaily.com/rss/all.xml' },
+    { name: 'New Scientist', url: 'https://www.newscientist.com/feed/home' },
+    { name: 'Scientific American', url: 'https://rss.sciam.com/ScientificAmerican-Global' },
+    { name: 'NASA', url: 'https://www.nasa.gov/rss/dyn/breaking_news.rss' },
+  ],
+  sports: [
+    { name: 'ESPN', url: 'https://www.espn.com/espn/rss/news' },
+    { name: 'BBC Sport', url: 'https://feeds.bbci.co.uk/sport/rss.xml' },
+    { name: 'Sky Sports', url: 'https://feeds.skynews.com/feeds/rss/sports.xml' },
+    { name: 'CBS Sports', url: 'https://www.cbssports.com/rss/headlines/' },
+    { name: 'The Athletic', url: 'https://theathletic.com/feed/' },
+  ],
+  ai: [
+    { name: 'MIT AI', url: 'https://news.mit.edu/topic/mitartificial-intelligence2/rss' },
+    { name: 'Google AI', url: 'https://blog.research.google/feed/' },
+    { name: 'OpenAI', url: 'https://openai.com/blog/feed.xml' },
+    { name: 'Hugging Face', url: 'https://huggingface.co/blog/feed.xml' },
+    { name: 'DeepMind', url: 'https://deepmind.google/blog/feed.xml' },
   ],
 };
+
+// ─── Source preferences (localStorage-backed) ─────────────────────────────────
+const STORAGE_KEY = 'healthy-thoughts-prefs';
+
+function defaultPrefs() {
+  const all = {};
+  for (const [cat, sources] of Object.entries(FEEDS)) {
+    all[cat] = sources.map(s => s.name); // all enabled by default
+  }
+  return { sources: all, nepali: true };
+}
+
+function loadPrefs() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      // Merge with defaults so new categories get all sources enabled
+      const defaults = defaultPrefs();
+      for (const cat of Object.keys(defaults.sources)) {
+        if (!parsed.sources[cat]) parsed.sources[cat] = defaults.sources[cat];
+      }
+      return parsed;
+    }
+  } catch { /* fall through */ }
+  return defaultPrefs();
+}
+
+function savePrefs(prefs) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs)); } catch { /* no-op */ }
+}
+
+export function getEnabledSources(category) {
+  const prefs = loadPrefs();
+  return prefs.sources[category] || [];
+}
+
+export function setEnabledSources(category, names) {
+  const prefs = loadPrefs();
+  prefs.sources[category] = names;
+  savePrefs(prefs);
+}
+
+export function getLanguagePref() {
+  return loadPrefs().nepali;
+}
+
+export function setLanguagePref(nepali) {
+  const prefs = loadPrefs();
+  prefs.nepali = nepali;
+  savePrefs(prefs);
+}
+
+export function getAllSources(category) {
+  return FEEDS[category] || [];
+}
 
 // ─── STREAMING API — calls onBatch(articles) as each feed resolves ────────────
 // This makes the UI show the first results in ~1-2s instead of waiting for all.
@@ -204,7 +281,11 @@ export async function streamTopHeadlines(category, onBatch) {
   const cached = getCached(category);
   if (cached) { onBatch(cached); return; }
 
-  const feedUrls = FEEDS[category] || FEEDS.usa;
+  const allSources = FEEDS[category] || FEEDS.usa;
+  const enabledNames = getEnabledSources(category);
+  const feedSources = allSources.filter(s => enabledNames.includes(s.name));
+  const feedUrls = feedSources.map(s => s.url);
+
   const allArticles = [];
   let emitted = new Set();
 
@@ -256,7 +337,10 @@ export async function fetchTopHeadlines(category) {
   const cached = getCached(category);
   if (cached) return cached;
 
-  const feedUrls = FEEDS[category] || FEEDS.usa;
+  const allSources = FEEDS[category] || FEEDS.usa;
+  const enabledNames = getEnabledSources(category);
+  const feedSources = allSources.filter(s => enabledNames.includes(s.name));
+  const feedUrls = feedSources.map(s => s.url);
 
   let results;
 
